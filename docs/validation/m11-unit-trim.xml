@@ -1,10 +1,10 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="com.itu.videoeditor.TrimRangeTest" tests="7" skipped="0" failures="0" errors="0" timestamp="2026-11-08T06:52:48" hostname="df86b68d582f" time="0.003">
+<testsuite name="com.itu.videoeditor.TrimRangeTest" tests="7" skipped="0" failures="0" errors="0" timestamp="2026-11-08T06:57:09" hostname="df86b68d582f" time="0.004">
   <properties/>
-  <testcase name="rejectsReversedRange" classname="com.itu.videoeditor.TrimRangeTest" time="0.002"/>
+  <testcase name="rejectsReversedRange" classname="com.itu.videoeditor.TrimRangeTest" time="0.003"/>
   <testcase name="rejectsEmptySource" classname="com.itu.videoeditor.TrimRangeTest" time="0.0"/>
   <testcase name="preservesMicrosecondPrecisionForVfrMedia" classname="com.itu.videoeditor.TrimRangeTest" time="0.0"/>
-  <testcase name="rejectsNegativeStart" classname="com.itu.videoeditor.TrimRangeTest" time="0.0"/>
+  <testcase name="rejectsNegativeStart" classname="com.itu.videoeditor.TrimRangeTest" time="0.001"/>
   <testcase name="rejectsPastSourceEnd" classname="com.itu.videoeditor.TrimRangeTest" time="0.0"/>
   <testcase name="rejectsEmptyRange" classname="com.itu.videoeditor.TrimRangeTest" time="0.0"/>
   <testcase name="fullSourceIsValid" classname="com.itu.videoeditor.TrimRangeTest" time="0.0"/>

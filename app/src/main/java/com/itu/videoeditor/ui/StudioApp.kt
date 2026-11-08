@@ -57,7 +57,7 @@ fun StudioApp(vm: StudioViewModel = viewModel()) {
                 sections.forEach { (target, label, icon) -> NavigationBarItem(route == target, { navigate(target) }, icon = { PrismIcon(icon) }, label = { Text(label) }, colors = NavigationBarItemDefaults.colors(indicatorColor = Cyan.copy(alpha = 0.10f), selectedIconColor = Cyan)) }
             }
         }) { padding ->
-            Row(Modifier.fillMaxSize().padding(padding)) {
+            Row(Modifier.fillMaxSize().padding(padding).consumeWindowInsets(padding).imePadding()) {
                 if (rail) Column(Modifier.width(80.dp).fillMaxHeight().background(Graphite).padding(vertical = 12.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     PrismIcon(Glyph.Prism, "ITU Prism", Cyan)
                     Spacer(Modifier.height(16.dp))
@@ -69,8 +69,8 @@ fun StudioApp(vm: StudioViewModel = viewModel()) {
                         if (route == "new") GlyphButton(Glyph.Back, "Back to Studio") { nav.popBackStack() }
                         else { PrismIcon(Glyph.Prism, tint = Cyan); Spacer(Modifier.width(10.dp)) }
                         Text("ITU", fontSize = 22.sp, fontWeight = FontWeight.Bold, letterSpacing = 3.sp)
-                        Text(" / VIDEO EDITOR", color = Muted, fontSize = 10.sp, letterSpacing = 1.sp)
-                        Spacer(Modifier.weight(1f))
+                        Text(" / VIDEO EDITOR", Modifier.weight(1f), color = Muted, fontSize = 10.sp, letterSpacing = 1.sp,
+                            maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
                         if (!bottom && !rail) {
                             GlyphButton(Glyph.Vault, "Media Vault", route == "vault") { navigate("vault") }
                             GlyphButton(Glyph.Settings, "Settings", route == "settings") { navigate("settings") }
