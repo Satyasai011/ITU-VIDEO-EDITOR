@@ -2,6 +2,7 @@
 
 | Milestone | State | Scope |
 | --- | --- | --- |
+| M1.1 UI redesign | Implemented; physical-device checks pending | Crystal Aurora dashboard, real thumbnails/cache, grid/list Vault, search/sort/orientation filters, Prism icons, responsive editor/context panels and motion policy |
 | M1 foundation | Implemented; device validation pending | Gradle project, Compose theme/navigation, dashboard, SAF import, Room projects, DataStore mute, actual ExoPlayer playback |
 | Critical media gate | Implemented test path; not device verified | Source trim, 720p H.264/AAC export, actual encoder report, basic MP4 validation, open output |
 | M2 timeline | Not implemented | Full timeline, frame index/stepping, magnifier, VFR boundary editing, split, Quick Split, undo/redo |

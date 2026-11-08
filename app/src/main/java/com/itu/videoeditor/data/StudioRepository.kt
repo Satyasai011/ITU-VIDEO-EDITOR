@@ -18,6 +18,9 @@ private val Context.preferences by preferencesDataStore("studio_preferences")
 class StudioRepository(private val context: Context, private val db: StudioDatabase) {
     val projects = db.projects().observeProjects()
     fun project(id: String) = db.projects().observeProject(id)
+    private val gridKey = booleanPreferencesKey("vault_grid")
+    val vaultGrid = context.preferences.data.map { it[gridKey] ?: true }
+    suspend fun setVaultGrid(grid: Boolean) { context.preferences.edit { it[gridKey] = grid } }
     private val muteKey = booleanPreferencesKey("mute_preview")
     val muted = context.preferences.data.map { it[muteKey] ?: false }
     suspend fun setMuted(muted: Boolean) { context.preferences.edit { it[muteKey] = muted } }

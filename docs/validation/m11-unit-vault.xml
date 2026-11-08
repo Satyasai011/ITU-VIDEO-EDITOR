@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.itu.videoeditor.VaultQueryTest" tests="7" skipped="0" failures="0" errors="0" timestamp="2026-11-08T06:52:48" hostname="df86b68d582f" time="0.026">
+  <properties/>
+  <testcase name="searchMatchesSourceAndProjectIgnoringCaseAndWhitespace" classname="com.itu.videoeditor.VaultQueryTest" time="0.022"/>
+  <testcase name="rotatedLandscapeSourceIsClassifiedAsPortrait" classname="com.itu.videoeditor.VaultQueryTest" time="0.001"/>
+  <testcase name="displayAspectHonorsRotationAndInvalidMetadataFallback" classname="com.itu.videoeditor.VaultQueryTest" time="0.001"/>
+  <testcase name="emptyResultsAreExplicit" classname="com.itu.videoeditor.VaultQueryTest" time="0.0"/>
+  <testcase name="sortingUsesSourceDurationAndDeterministicNames" classname="com.itu.videoeditor.VaultQueryTest" time="0.001"/>
+  <testcase name="orientationFiltersExcludeUnknownMetadata" classname="com.itu.videoeditor.VaultQueryTest" time="0.0"/>
+  <testcase name="repeatedSourceKeepsMostRecentlyEditedProjectReference" classname="com.itu.videoeditor.VaultQueryTest" time="0.0"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

@@ -14,7 +14,7 @@ concurrency:
 
 jobs:
   build:
-    name: Build M1 Debug APK
+    name: Build M1.1 Debug APK
     runs-on: ubuntu-24.04
     timeout-minutes: 30
 
@@ -44,7 +44,7 @@ jobs:
         run: chmod +x ./gradlew
 
       - name: Build debug APK and run unit tests
-        run: ./gradlew --no-daemon --stacktrace :app:assembleDebug :app:testDebugUnitTest
+        run: ./gradlew --no-daemon --stacktrace :app:assembleDebug :app:testDebugUnitTest :app:assembleDebugAndroidTest :app:lintDebug
 
       - name: Verify debug APK signature
         run: |
@@ -54,7 +54,7 @@ jobs:
       - name: Upload installable debug APK
         uses: actions/upload-artifact@v4
         with:
-          name: ITU-VIDEO-EDITOR-M1-debug-${{ github.run_number }}
+          name: ITU-VIDEO-EDITOR-M1.1-debug-${{ github.run_number }}
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 30

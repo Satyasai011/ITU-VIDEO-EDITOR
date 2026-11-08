@@ -1,6 +1,6 @@
-# ITU VIDEO EDITOR — Milestone 1
+# ITU VIDEO EDITOR — M1.1 Premium UI
 
-Native Kotlin/Compose Android project for a landscape-first tablet editor. This delivery is M1, not the complete V1.0. No advanced timeline buttons or simulated operations are presented.
+Native Kotlin/Compose Android project for a landscape-first tablet editor. This delivery is M1.1 (version 0.1.1-m1.1), not the complete V1.0. See [M1.1 implementation and validation](docs/M1_1.md) for the redesign and current checks; the original M1 validation report remains historical. No advanced timeline buttons or simulated operations are presented.
 
 ## Requirements and build
 
@@ -26,7 +26,9 @@ The debug APK is written to `app/build/outputs/apk/debug/app-debug.apk` when the
 
 ## Included
 
-- Obsidian Prism Material 3 theme and responsive studio navigation.
+- Crystal Aurora / Obsidian Precision Material 3 design, outlined Prism glyphs and responsive studio navigation.
+- Real background video thumbnails, bounded memory/disk caching, grid/list Vault, search, sorting and orientation filters.
+- Compact phone editor context panels, collapsible tablet panels and video-size-aware preview fitting.
 - Dashboard, new project, Media Vault, single-source preview/trim workspace, settings.
 - Real SAF video import with persistable read permission, metadata extraction, Room project persistence.
 - Media3 ExoPlayer playback with native seek controls, error reporting, preview mute stored in DataStore, and lifecycle pause/release.

@@ -11,8 +11,16 @@ import org.junit.runner.RunWith
 class StudioSmokeTest {
     @get:Rule val compose = createAndroidComposeRule<MainActivity>()
     @Test fun newProjectOpensRealImportScreen() {
-        compose.onNodeWithText("＋ New project").performClick()
+        compose.onNodeWithText("New project").performClick()
         compose.onNodeWithText("Choose video & create").assertIsDisplayed()
         compose.onNodeWithText("Project name").assertIsDisplayed()
+    }
+    @Test fun vaultHasAccessibleViewSwitchAndSearch() {
+        compose.onAllNodesWithText("Media Vault").onFirst().performClick()
+        compose.onNodeWithContentDescription("Grid view").assertIsDisplayed()
+        compose.onNodeWithContentDescription("List view").performClick()
+        compose.onNodeWithText("Search imported videos").performTextInput("gameplay")
+        compose.onNodeWithContentDescription("Clear search").performClick()
+        compose.onNodeWithText("All videos").assertIsDisplayed()
     }
 }

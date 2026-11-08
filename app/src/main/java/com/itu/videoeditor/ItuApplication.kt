@@ -6,6 +6,11 @@ import com.itu.videoeditor.data.StudioDatabase
 import com.itu.videoeditor.data.StudioRepository
 
 class ItuApplication : Application() {
+    val thumbnails by lazy { com.itu.videoeditor.media.ThumbnailStore(this) }
+    override fun onTrimMemory(level: Int) {
+        super.onTrimMemory(level)
+        thumbnails.clearMemory()
+    }
     val repository by lazy {
         StudioRepository(this, Room.databaseBuilder(this, StudioDatabase::class.java, "itu-studio.db").build())
     }

@@ -11,9 +11,22 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 
+data class LibraryState(val projects: List<ProjectEntity> = emptyList(), val loading: Boolean = true, val error: String? = null)
+
+@OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
 class StudioViewModel(application: Application) : AndroidViewModel(application) {
     private val repository = (application as ItuApplication).repository
-    val projects = repository.projects.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+    private val libraryReload = MutableStateFlow(0)
+    val library = libraryReload.flatMapLatest {
+        repository.projects.map { LibraryState(projects = it, loading = false) }
+            .onStart { emit(LibraryState()) }
+            .catch { emit(LibraryState(loading = false, error = "Projects could not be loaded: ${it.message}")) }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), LibraryState())
+    fun retryLibrary() { libraryReload.value++ }
+    val vaultGrid = repository.vaultGrid.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
+    fun setVaultGrid(grid: Boolean) { viewModelScope.launch {
+        runCatching { repository.setVaultGrid(grid) }.onFailure { message.value = "View preference could not be saved" }
+    } }
     val muted = repository.muted.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
     val busy = MutableStateFlow(false)
     val message = MutableStateFlow<String?>(null)

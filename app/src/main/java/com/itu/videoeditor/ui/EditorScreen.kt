@@ -1,7 +1,8 @@
 package com.itu.videoeditor.ui
 
 import android.content.Intent
-import android.net.Uri
+import androidx.compose.animation.*
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -12,6 +13,8 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -22,134 +25,167 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
+import androidx.media3.common.VideoSize
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
 import com.itu.videoeditor.data.ProjectEntity
+import com.itu.videoeditor.domain.displayAspect
 import com.itu.videoeditor.media.ValidationExporter
+import com.itu.videoeditor.ui.components.*
 import kotlinx.coroutines.delay
+import kotlin.math.min
 
 @androidx.annotation.OptIn(UnstableApi::class)
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
-fun EditorScreen(project: ProjectEntity, muted: Boolean, save: (ProjectEntity, Long, Long) -> Unit) {
+fun EditorScreen(project: ProjectEntity, muted: Boolean, save: (ProjectEntity, Long, Long) -> Unit, back: () -> Unit) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
     val player = remember(project.id) { ExoPlayer.Builder(context).build() }
     val exporter = remember(project.id) { ValidationExporter(context.applicationContext) }
     val export by exporter.state.collectAsStateWithLifecycle()
     var playbackError by remember { mutableStateOf<String?>(null) }
+    var outputError by remember { mutableStateOf<String?>(null) }
     var positionMs by remember { mutableLongStateOf(0) }
     var playing by remember { mutableStateOf(false) }
     var ready by remember { mutableStateOf(false) }
     var leftVisible by rememberSaveable { mutableStateOf(true) }
     var rightVisible by rememberSaveable { mutableStateOf(true) }
+    var panel by rememberSaveable { mutableStateOf("trim") }
     var startUs by rememberSaveable(project.id, project.trimStartUs) { mutableLongStateOf(project.trimStartUs) }
     var endUs by rememberSaveable(project.id, project.trimEndUs) { mutableLongStateOf(project.trimEndUs) }
     var previewStartUs by remember { mutableLongStateOf(project.trimStartUs) }
     var previewEndUs by remember { mutableLongStateOf(project.trimEndUs) }
+    var videoAspect by remember { mutableFloatStateOf(displayAspect(project.width, project.height, project.rotation)) }
     val dirty = startUs != project.trimStartUs || endUs != project.trimEndUs
+    val motionMs = if (LocalPrismMotion.current) 220 else 0
     LaunchedEffect(muted) { player.volume = if (muted) 0f else 1f }
     LaunchedEffect(project.sourceUri, project.trimStartUs, project.trimEndUs) {
-        ready = false
-        playbackError = null
-        previewStartUs = project.trimStartUs
-        previewEndUs = project.trimEndUs
-        player.setMediaItem(MediaItem.Builder().setUri(project.sourceUri).setClippingConfiguration(
-            MediaItem.ClippingConfiguration.Builder().setStartPositionMs(project.trimStartUs / 1000).setEndPositionMs(project.trimEndUs / 1000).build()).build())
-        player.prepare()
+        ready = false; playbackError = null
+        previewStartUs = project.trimStartUs; previewEndUs = project.trimEndUs
+        player.setMediaItem(clippedItem(project, previewStartUs, previewEndUs)); player.prepare()
     }
     DisposableEffect(player, lifecycleOwner) {
         val listener = object : Player.Listener {
-            override fun onPlayerError(error: PlaybackException) { playbackError = "${error.errorCodeName}: ${error.message}. Check that the source file is still available in its original location." }
+            override fun onPlayerError(error: PlaybackException) { playbackError = "${error.errorCodeName}: ${error.message}. Check the source file is still available."; ready = false }
             override fun onIsPlayingChanged(isPlaying: Boolean) { playing = isPlaying }
             override fun onPlaybackStateChanged(state: Int) { ready = state == Player.STATE_READY || state == Player.STATE_ENDED }
+            override fun onVideoSizeChanged(videoSize: VideoSize) {
+                if (videoSize.width > 0 && videoSize.height > 0) videoAspect = videoSize.width * videoSize.pixelWidthHeightRatio / videoSize.height
+            }
         }
         val observer = LifecycleEventObserver { _, event -> if (event == Lifecycle.Event.ON_STOP) { player.pause(); exporter.cancel() } }
-        player.addListener(listener)
-        lifecycleOwner.lifecycle.addObserver(observer)
+        player.addListener(listener); lifecycleOwner.lifecycle.addObserver(observer)
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer); player.removeListener(listener); player.release(); exporter.release() }
     }
     LaunchedEffect(player) { while (true) { positionMs = player.currentPosition; delay(100) } }
+    LaunchedEffect(export.active) { if (export.active) panel = "export" }
     fun preview() {
-        previewStartUs = startUs
-        previewEndUs = endUs
-        player.setMediaItem(MediaItem.Builder().setUri(project.sourceUri).setClippingConfiguration(
-            MediaItem.ClippingConfiguration.Builder().setStartPositionMs(startUs / 1000).setEndPositionMs(endUs / 1000).build()).build())
-        player.prepare(); player.play()
+        previewStartUs = startUs; previewEndUs = endUs; ready = false
+        player.setMediaItem(clippedItem(project, startUs, endUs)); player.prepare(); player.play()
     }
-    Column(Modifier.fillMaxSize().padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
-            Column(Modifier.weight(1f)) { Text(project.name, style = MaterialTheme.typography.titleLarge, maxLines = 1); Text("SOURCE PREVIEW / M1", color = Cyan, fontSize = 10.sp, letterSpacing = 2.sp) }
-            TextButton(onClick = { leftVisible = !leftVisible }) { Text(if (leftVisible) "Hide media" else "Media") }
-            TextButton(onClick = { rightVisible = !rightVisible }) { Text(if (rightVisible) "Hide inspector" else "Inspector") }
-        }
-        BoxWithConstraints(Modifier.weight(1f)) {
-            val wide = maxWidth >= 900.dp
-            Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                if (wide && leftVisible) Panel(Modifier.width(200.dp).fillMaxHeight()) {
-                    Text("MEDIA VAULT", color = Muted, fontSize = 11.sp)
-                    Text(project.sourceName, style = MaterialTheme.typography.titleMedium)
-                    Text("${project.width} × ${project.height}\nRotation ${project.rotation}°\n${timeLabel(project.durationUs)}", color = Muted, fontSize = 12.sp)
-                    HorizontalDivider()
-                    Text("One source · linked original audio", color = Violet, fontSize = 12.sp)
-                }
-                Column(Modifier.weight(1f).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Box(Modifier.weight(1f).fillMaxWidth().background(androidx.compose.ui.graphics.Color.Black), contentAlignment = Alignment.Center) {
-                        AndroidView(factory = { PlayerView(it).apply { this.player = player; useController = true; setShowBuffering(PlayerView.SHOW_BUFFERING_WHEN_PLAYING); keepScreenOn = true } }, update = { it.player = player }, modifier = Modifier.fillMaxSize())
-                        if (!ready && playbackError == null) CircularProgressIndicator()
-                        playbackError?.let { Surface(color = Graphite.copy(alpha = 0.95f), modifier = Modifier.padding(20.dp)) { Text(it, modifier = Modifier.padding(16.dp), color = MaterialTheme.colorScheme.error) } }
-                    }
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                        Text(timeLabel(previewStartUs + positionMs * 1000), color = Cyan, fontSize = 12.sp)
-                        TextButton(onClick = { if (playing) player.pause() else { if (player.playbackState == Player.STATE_ENDED) player.seekTo(0); player.play() } }, enabled = playbackError == null && ready) { Text(if (playing) "Pause" else "Play") }
-                        Text(timeLabel(previewEndUs), color = Muted, fontSize = 12.sp)
-                    }
-                }
-                if (wide && rightVisible) Panel(Modifier.width(220.dp).fillMaxHeight().verticalScroll(rememberScrollState())) {
-                    Text("INSPECTOR", color = Muted, fontSize = 11.sp)
-                    Text("Source range", style = MaterialTheme.typography.titleMedium)
-                    Text("IN  ${timeLabel(startUs)}\nOUT  ${timeLabel(endUs)}", color = Cyan, fontSize = 13.sp)
-                    Text("Duration ${timeLabel(endUs - startUs)}", color = Muted, fontSize = 12.sp)
-                    Text("Trim is non-destructive. M1 trim controls have millisecond precision; frame-boundary tools arrive in M2.", color = Muted, fontSize = 12.sp)
-                }
-            }
-        }
-        Surface(shape = MaterialTheme.shapes.medium, color = Graphite) {
-            Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)) {
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) { Text("SOURCE TRIM", color = Violet, fontSize = 11.sp); Text("${timeLabel(startUs)} → ${timeLabel(endUs)}", color = Muted, fontSize = 11.sp) }
-                RangeSlider(value = startUs.toFloat()..endUs.toFloat(), onValueChange = { range ->
-                    val start = (range.start.toLong() / 1000 * 1000).coerceIn(0, (project.durationUs - 1000).coerceAtLeast(0))
-                    val end = (range.endInclusive.toLong() / 1000 * 1000).coerceIn(1000.coerceAtMost(project.durationUs), project.durationUs)
-                    if (end > start) { startUs = start; endUs = end }
-                }, valueRange = 0f..project.durationUs.toFloat(), enabled = !export.active)
-                FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    TextButton(onClick = { startUs = (previewStartUs + player.currentPosition * 1000).coerceIn(0, (endUs - 1000).coerceAtLeast(0)) }, enabled = ready && !export.active) { Text("Set in") }
-                    TextButton(onClick = { endUs = (previewStartUs + player.currentPosition * 1000).coerceIn((startUs + 1000).coerceAtMost(project.durationUs), project.durationUs) }, enabled = ready && !export.active) { Text("Set out") }
-                    TextButton(onClick = { preview() }, enabled = !export.active) { Text("Preview trim") }
-                    Button(onClick = { save(project, startUs, endUs) }, enabled = dirty && !export.active) { Text("Save trim") }
-                    OutlinedButton(onClick = { player.pause(); exporter.start(project.copy(trimStartUs = startUs, trimEndUs = endUs)) }, enabled = !export.active && playbackError == null && ready) { Text("Test export") }
-                }
-            }
-        }
-        if (export.active || export.output != null || export.error != null || export.stage.startsWith("Cancelled")) {
-            Column(Modifier.fillMaxWidth().padding(bottom = 8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+    @Composable fun TrimPanel() {
+        TrimControls(startUs, endUs, project.durationUs, !export.active, ready,
+            change = { start, end -> startUs = start; endUs = end },
+            setIn = { startUs = (previewStartUs + player.currentPosition * 1000).coerceIn(0, (endUs - 1000).coerceAtLeast(0)) },
+            setOut = { endUs = (previewStartUs + player.currentPosition * 1000).coerceIn((startUs + 1000).coerceAtMost(project.durationUs), project.durationUs) }, preview = ::preview)
+    }
+    @Composable fun ExportPanel() {
+        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Text("TEST EXPORT", color = Violet, fontSize = 10.sp)
+            Text("720p · H.264 / AAC", style = MaterialTheme.typography.titleMedium)
+            Text("Keep the app in the foreground. Output is saved to Movies/ITU Video Editor.", color = Muted, fontSize = 12.sp)
+            if (export.active) {
                 Text(export.stage, color = Cyan, fontSize = 12.sp)
-                if (export.active) {
-                    export.progress?.let { LinearProgressIndicator(progress = { it / 100f }, modifier = Modifier.fillMaxWidth()) } ?: LinearProgressIndicator(Modifier.fillMaxWidth())
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(export.progress?.let { "$it% · Keep app in foreground" } ?: "Waiting for measured progress · Keep app in foreground", color = Muted, fontSize = 12.sp)
-                        TextButton(onClick = { exporter.cancel() }, enabled = export.canCancel) { Text(if (export.canCancel) "Cancel" else "Finishing…") }
-                    }
-                }
+                export.progress?.let { LinearProgressIndicator(progress = { it / 100f }, modifier = Modifier.fillMaxWidth()); Text("$it%", color = Muted) }
+                    ?: LinearProgressIndicator(Modifier.fillMaxWidth())
+                OutlinedButton({ exporter.cancel() }, enabled = export.canCancel, modifier = Modifier.heightIn(min = 48.dp)) { Text(if (export.canCancel) "Cancel export" else "Finishing…") }
+            } else {
                 export.error?.let { Text(it, color = MaterialTheme.colorScheme.error, fontSize = 12.sp) }
-                export.output?.let { uri ->
-                    TextButton(onClick = {
-                        runCatching { context.startActivity(Intent(Intent.ACTION_VIEW).setDataAndType(uri, "video/mp4").addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)) }
-                            .onFailure { playbackError = "No app available to play the exported MP4." }
-                    }) { Text("Open exported MP4") }
+                if (export.output != null || export.stage.startsWith("Cancelled")) Text(export.stage, color = Cyan, fontSize = 12.sp)
+                PrismAction(if (export.error != null) "Retry test export" else "Start test export", Glyph.Export,
+                    enabled = ready && playbackError == null, primary = true) {
+                    player.pause(); outputError = null; exporter.start(project.copy(trimStartUs = startUs, trimEndUs = endUs))
+                }
+                export.output?.let { uri -> PrismAction("Open exported MP4", Glyph.Play) {
+                    runCatching { context.startActivity(Intent(Intent.ACTION_VIEW).setDataAndType(uri, "video/mp4").addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)) }
+                        .onFailure { outputError = "No application could open this MP4: ${it.message}" }
+                } }
+                outputError?.let { Text(it, color = MaterialTheme.colorScheme.error, fontSize = 12.sp) }
+            }
+        }
+    }
+    BoxWithConstraints(Modifier.fillMaxSize()) {
+        val wide = maxWidth >= 900.dp && maxHeight >= 480.dp
+        val short = maxHeight < 430.dp
+        val contextHeight = (maxHeight * 0.42f).coerceIn(140.dp, 290.dp)
+        Column(Modifier.fillMaxSize().then(if (short) Modifier.verticalScroll(rememberScrollState()) else Modifier).padding(horizontal = 12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(Modifier.fillMaxWidth().heightIn(min = 48.dp), verticalAlignment = Alignment.CenterVertically) {
+                GlyphButton(Glyph.Back, "Back to Studio", onClick = back)
+                Column(Modifier.weight(1f)) {
+                    Text(project.name, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text(if (dirty) "UNSAVED TRIM" else "OBSIDIAN PRECISION", color = if (dirty) Violet else Muted, fontSize = 9.sp, letterSpacing = 1.sp)
+                }
+                if (wide) {
+                    GlyphButton(Glyph.Vault, if (leftVisible) "Collapse media panel" else "Expand media panel", leftVisible) { leftVisible = !leftVisible }
+                    GlyphButton(Glyph.Info, if (rightVisible) "Collapse inspector" else "Expand inspector", rightVisible) { rightVisible = !rightVisible }
                 }
             }
-        } else Text("Validation export: 720p H.264 / AAC · foreground only · stored in Movies/ITU Video Editor", color = Muted, fontSize = 10.sp, modifier = Modifier.padding(bottom = 8.dp))
+            Row(Modifier.fillMaxWidth().then(if (short) Modifier.height(210.dp) else Modifier.weight(1f)), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                if (wide) AnimatedVisibility(leftVisible, enter = expandHorizontally(tween(motionMs)) + fadeIn(tween(motionMs)), exit = shrinkHorizontally(tween(motionMs)) + fadeOut(tween(motionMs))) {
+                    Panel(Modifier.width(184.dp).fillMaxHeight().verticalScroll(rememberScrollState())) { SourceInfo(project) }
+                }
+                Column(Modifier.weight(1f).fillMaxHeight()) {
+                    BoxWithConstraints(Modifier.weight(1f).fillMaxWidth().background(androidx.compose.ui.graphics.Color.Black), contentAlignment = Alignment.Center) {
+                        val fittedWidth = min(maxWidth.value, maxHeight.value * videoAspect).coerceAtLeast(1f).dp
+                        val fittedHeight = (fittedWidth / videoAspect).coerceAtLeast(1.dp)
+                        AndroidView(factory = { PlayerView(it).apply { this.player = player; useController = false; resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FIT; keepScreenOn = true } },
+                            update = { it.player = player }, modifier = Modifier.size(fittedWidth, fittedHeight))
+                        if (!ready && playbackError == null) CircularProgressIndicator(Modifier.size(28.dp), strokeWidth = 2.dp)
+                        playbackError?.let { Text(it, color = MaterialTheme.colorScheme.error, modifier = Modifier.fillMaxSize().background(Obsidian.copy(alpha = 0.9f)).verticalScroll(rememberScrollState()).padding(12.dp), fontSize = 12.sp) }
+                    }
+                    PlaybackControls(positionMs * 1000, previewStartUs, previewEndUs, playing, ready,
+                        playPause = { if (playing) player.pause() else { if (player.playbackState == Player.STATE_ENDED) player.seekTo(0); player.play() } },
+                        seek = { fraction -> player.seekTo(((previewEndUs - previewStartUs) / 1000.0 * fraction).toLong().coerceIn(0, ((previewEndUs - previewStartUs) / 1000 - 1).coerceAtLeast(0))) })
+                }
+                if (wide) AnimatedVisibility(rightVisible, enter = expandHorizontally(tween(motionMs)) + fadeIn(tween(motionMs)), exit = shrinkHorizontally(tween(motionMs)) + fadeOut(tween(motionMs))) {
+                    Panel(Modifier.width(196.dp).fillMaxHeight().verticalScroll(rememberScrollState())) {
+                        Text("INSPECTOR", color = Muted, fontSize = 10.sp)
+                        Text("Source range", style = MaterialTheme.typography.titleMedium)
+                        Text("IN  ${timeLabel(startUs)}\nOUT ${timeLabel(endUs)}", color = Cyan, fontFamily = FontFamily.Monospace, fontSize = 12.sp)
+                        Text("Original media stays untouched. Trim precision is milliseconds.", color = Muted, fontSize = 12.sp)
+                    }
+                }
+            }
+            Surface(color = Graphite, shape = MaterialTheme.shapes.medium) {
+                Row(Modifier.fillMaxWidth().padding(4.dp), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically) {
+                    listOf(Triple("media", Glyph.Vault, "Source media"), Triple("trim", Glyph.Trim, "Trim controls"), Triple("export", Glyph.Export, "Test export")).forEach { (key, icon, label) ->
+                        GlyphButton(icon, label, panel == key, primary = true) { panel = if (panel == key) "" else key }
+                    }
+                    GlyphButton(Glyph.Save, "Save trim", enabled = dirty && !export.active, primary = true) { save(project, startUs, endUs) }
+                }
+            }
+            AnimatedVisibility(panel.isNotEmpty(), enter = expandVertically(tween(motionMs)) + fadeIn(tween(motionMs)), exit = shrinkVertically(tween(motionMs)) + fadeOut(tween(motionMs))) {
+                Panel(Modifier.fillMaxWidth().heightIn(max = if (wide) 240.dp else contextHeight).verticalScroll(rememberScrollState())) {
+                    when (panel) { "media" -> SourceInfo(project); "trim" -> TrimPanel(); "export" -> ExportPanel() }
+                }
+            }
+            Spacer(Modifier.height(2.dp))
+        }
+    }
+}
+
+@androidx.annotation.OptIn(UnstableApi::class)
+private fun clippedItem(project: ProjectEntity, startUs: Long, endUs: Long) = MediaItem.Builder().setUri(project.sourceUri)
+    .setClippingConfiguration(MediaItem.ClippingConfiguration.Builder().setStartPositionMs(startUs / 1000).setEndPositionMs(endUs / 1000).build()).build()
+
+@Composable
+private fun SourceInfo(project: ProjectEntity) {
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Text("SOURCE MEDIA", color = Muted, fontSize = 10.sp)
+        MediaThumbnail(project, Modifier.fillMaxWidth().heightIn(max = 110.dp).aspectRatio(16f / 9f))
+        Text(project.sourceName, style = MaterialTheme.typography.titleMedium, overflow = TextOverflow.Ellipsis, maxLines = 2)
+        Text("${project.width} × ${project.height} · rotation ${project.rotation}°\n${timeLabel(project.durationUs)} · linked source audio", color = Muted, fontSize = 12.sp)
     }
 }
