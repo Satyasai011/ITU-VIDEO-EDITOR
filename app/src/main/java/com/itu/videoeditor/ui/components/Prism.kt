@@ -25,12 +25,18 @@ import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.itu.videoeditor.ui.*
+import com.itu.videoeditor.ItuApplication
+import com.itu.videoeditor.data.StudioPreferences
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import kotlinx.coroutines.flow.flowOf
 
 val LocalPrismMotion = staticCompositionLocalOf { true }
 
 @Composable
 fun PrismMotion(content: @Composable () -> Unit) {
     val resolver = LocalContext.current.contentResolver
+    val repo = (LocalContext.current.applicationContext as? ItuApplication)?.repository
+    val preferences by (repo?.preferences ?: flowOf(StudioPreferences())).collectAsStateWithLifecycle(initialValue = StudioPreferences())
     fun enabled() = runCatching {
         Settings.Global.getFloat(resolver, Settings.Global.ANIMATOR_DURATION_SCALE, 1f) > 0 &&
             Settings.Global.getFloat(resolver, Settings.Global.TRANSITION_ANIMATION_SCALE, 1f) > 0
@@ -44,7 +50,7 @@ fun PrismMotion(content: @Composable () -> Unit) {
         resolver.registerContentObserver(Settings.Global.getUriFor(Settings.Global.TRANSITION_ANIMATION_SCALE), false, observer)
         onDispose { resolver.unregisterContentObserver(observer) }
     }
-    CompositionLocalProvider(LocalPrismMotion provides motion, content = content)
+    CompositionLocalProvider(LocalPrismMotion provides (motion && !preferences.reduceMotion), content = content)
 }
 
 enum class Glyph { Prism, Studio, Vault, Settings, Plus, Back, Grid, List, Search, Sort, Play, Pause, Trim, Export, Save, Close, Retry, Info, Start, End }

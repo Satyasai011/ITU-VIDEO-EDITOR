@@ -12,7 +12,7 @@ class StudioSmokeTest {
     @get:Rule val compose = createAndroidComposeRule<MainActivity>()
     @Test fun newProjectOpensRealImportScreen() {
         compose.onNodeWithText("New project").performClick()
-        compose.onNodeWithText("Choose video & create").assertIsDisplayed()
+        compose.onNodeWithText("Choose videos to inspect").assertIsDisplayed()
         compose.onNodeWithText("Project name").assertIsDisplayed()
     }
     @Test fun vaultHasAccessibleViewSwitchAndSearch() {
@@ -21,6 +21,6 @@ class StudioSmokeTest {
         compose.onNodeWithContentDescription("List view").performClick()
         compose.onNodeWithText("Search imported videos").performTextInput("gameplay")
         compose.onNodeWithContentDescription("Clear search").performClick()
-        compose.onNodeWithText("All videos").assertIsDisplayed()
+        compose.onNodeWithText("All videos").performScrollTo().assertIsDisplayed()
     }
 }

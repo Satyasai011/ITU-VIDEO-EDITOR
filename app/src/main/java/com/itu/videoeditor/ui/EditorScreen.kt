@@ -32,6 +32,10 @@ import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
 import com.itu.videoeditor.data.ProjectEntity
 import com.itu.videoeditor.domain.displayAspect
+import com.itu.videoeditor.domain.MediaInfo
+import com.itu.videoeditor.domain.decimalRate
+import com.itu.videoeditor.data.StudioPreferences
+import com.itu.videoeditor.data.MetadataJson
 import com.itu.videoeditor.media.ValidationExporter
 import com.itu.videoeditor.ui.components.*
 import kotlinx.coroutines.delay
@@ -39,7 +43,7 @@ import kotlin.math.min
 
 @androidx.annotation.OptIn(UnstableApi::class)
 @Composable
-fun EditorScreen(project: ProjectEntity, muted: Boolean, save: (ProjectEntity, Long, Long) -> Unit, back: () -> Unit) {
+fun EditorScreen(project: ProjectEntity, muted: Boolean, save: (ProjectEntity, Long, Long) -> Unit, preferences: StudioPreferences = StudioPreferences(), info: MediaInfo? = null, refreshMetadata: (() -> Unit)? = null, back: () -> Unit) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
     val player = remember(project.id) { ExoPlayer.Builder(context).build() }
@@ -61,6 +65,8 @@ fun EditorScreen(project: ProjectEntity, muted: Boolean, save: (ProjectEntity, L
     val dirty = startUs != project.trimStartUs || endUs != project.trimEndUs
     val motionMs = if (LocalPrismMotion.current) 220 else 0
     LaunchedEffect(muted) { player.volume = if (muted) 0f else 1f }
+    LaunchedEffect(preferences.loopPreview) { player.repeatMode = if (preferences.loopPreview) Player.REPEAT_MODE_ONE else Player.REPEAT_MODE_OFF }
+    LaunchedEffect(project.id, preferences.collapsePanels) { leftVisible = !preferences.collapsePanels; rightVisible = !preferences.collapsePanels }
     LaunchedEffect(project.sourceUri, project.trimStartUs, project.trimEndUs) {
         ready = false; playbackError = null
         previewStartUs = project.trimStartUs; previewEndUs = project.trimEndUs
@@ -86,6 +92,7 @@ fun EditorScreen(project: ProjectEntity, muted: Boolean, save: (ProjectEntity, L
         player.setMediaItem(clippedItem(project, startUs, endUs)); player.prepare(); player.play()
     }
     @Composable fun TrimPanel() {
+        if (preferences.showHints) Text("Drag IN / OUT or set a boundary at the playhead. Save trim commits this source range to the project.", color = Muted, fontSize = 11.sp)
         TrimControls(startUs, endUs, project.durationUs, !export.active, ready,
             change = { start, end -> startUs = start; endUs = end },
             setIn = { startUs = (previewStartUs + player.currentPosition * 1000).coerceIn(0, (endUs - 1000).coerceAtLeast(0)) },
@@ -134,7 +141,7 @@ fun EditorScreen(project: ProjectEntity, muted: Boolean, save: (ProjectEntity, L
             }
             Row(Modifier.fillMaxWidth().then(if (short) Modifier.height(210.dp) else Modifier.weight(1f)), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 if (wide) AnimatedVisibility(leftVisible, enter = expandHorizontally(tween(motionMs)) + fadeIn(tween(motionMs)), exit = shrinkHorizontally(tween(motionMs)) + fadeOut(tween(motionMs))) {
-                    Panel(Modifier.width(184.dp).fillMaxHeight().verticalScroll(rememberScrollState())) { SourceInfo(project) }
+                    Panel(Modifier.width(184.dp).fillMaxHeight().verticalScroll(rememberScrollState())) { SourceInfo(project, info, refreshMetadata) }
                 }
                 Column(Modifier.weight(1f).fillMaxHeight()) {
                     BoxWithConstraints(Modifier.weight(1f).fillMaxWidth().background(androidx.compose.ui.graphics.Color.Black), contentAlignment = Alignment.Center) {
@@ -155,6 +162,8 @@ fun EditorScreen(project: ProjectEntity, muted: Boolean, save: (ProjectEntity, L
                         Text("Source range", style = MaterialTheme.typography.titleMedium)
                         Text("IN  ${timeLabel(startUs)}\nOUT ${timeLabel(endUs)}", color = Cyan, fontFamily = FontFamily.Monospace, fontSize = 12.sp)
                         Text("Original media stays untouched. Trim precision is milliseconds.", color = Muted, fontSize = 12.sp)
+                        MetadataJson.readFormat(project.formatJson)?.let { format -> Text("Project intent: ${format.width ?: "Unknown"} × ${format.height ?: "Unknown"} · ${format.frameRate?.let(::decimalRate) ?: "Unknown"} FPS", color = Muted, fontSize = 12.sp) }
+                        Text("Export remains 720p validation.", color = Muted, fontSize = 11.sp)
                     }
                 }
             }
@@ -168,7 +177,7 @@ fun EditorScreen(project: ProjectEntity, muted: Boolean, save: (ProjectEntity, L
             }
             AnimatedVisibility(panel.isNotEmpty(), enter = expandVertically(tween(motionMs)) + fadeIn(tween(motionMs)), exit = shrinkVertically(tween(motionMs)) + fadeOut(tween(motionMs))) {
                 Panel(Modifier.fillMaxWidth().heightIn(max = if (wide) 240.dp else contextHeight).verticalScroll(rememberScrollState())) {
-                    when (panel) { "media" -> SourceInfo(project); "trim" -> TrimPanel(); "export" -> ExportPanel() }
+                    when (panel) { "media" -> SourceInfo(project, info, refreshMetadata); "trim" -> TrimPanel(); "export" -> ExportPanel() }
                 }
             }
             Spacer(Modifier.height(2.dp))
@@ -181,11 +190,12 @@ private fun clippedItem(project: ProjectEntity, startUs: Long, endUs: Long) = Me
     .setClippingConfiguration(MediaItem.ClippingConfiguration.Builder().setStartPositionMs(startUs / 1000).setEndPositionMs(endUs / 1000).build()).build()
 
 @Composable
-private fun SourceInfo(project: ProjectEntity) {
+private fun SourceInfo(project: ProjectEntity, info: MediaInfo?, refresh: (() -> Unit)?) {
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        Text("SOURCE MEDIA", color = Muted, fontSize = 10.sp)
-        MediaThumbnail(project, Modifier.fillMaxWidth().heightIn(max = 110.dp).aspectRatio(16f / 9f))
+        Text("SOURCE INFORMATION", color = Muted, fontSize = 10.sp)
+        MediaThumbnail(project, Modifier.fillMaxWidth().heightIn(max = 110.dp).aspectRatio(16f / 9f), info)
         Text(project.sourceName, style = MaterialTheme.typography.titleMedium, overflow = TextOverflow.Ellipsis, maxLines = 2)
-        Text("${project.width} × ${project.height} · rotation ${project.rotation}°\n${timeLabel(project.durationUs)} · linked source audio", color = Muted, fontSize = 12.sp)
+        MediaInformation(info)
+        if (refresh != null) OutlinedButton(onClick = refresh) { Text("Refresh metadata") }
     }
 }

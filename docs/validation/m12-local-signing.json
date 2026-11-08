@@ -1,0 +1,13 @@
+{
+  "applicationId": "com.itu.videoeditor",
+  "versionCode": 3,
+  "versionName": "0.1.2-m1.2",
+  "apkSha256": "c3b1b09ffdb75f9e93b94255742953ff62f5ef64f3cb2abb6a56056fba3925be",
+  "apkSignatureVerified": true,
+  "signingCertificateSha256": "50832023b0fe979d8a5c08c235b2ae9380e1c4612b99f94667ace92d1586d320",
+  "deliveredM11CertificateSha256": "9887fa28c21cc5684780c445b257ec312c6c09e0fe0e8684a66a27df4fdbdee8",
+  "matchesDeliveredM11Certificate": false,
+  "installedDeviceInspected": false,
+  "status": "FRESH_INSTALL_ONLY_NOT_AN_M11_UPDATE",
+  "dataProtection": "Do not uninstall an existing app holding projects to resolve a signing conflict. No installed data has been modified. A device-level update is not verified."
+}

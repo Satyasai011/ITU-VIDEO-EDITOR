@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.itu.videoeditor.MediaInfoTest" tests="7" skipped="0" failures="0" errors="0" timestamp="2026-11-08T07:35:46" hostname="df86b68d582f" time="0.109">
+  <properties/>
+  <testcase name="varyingCadenceIsFlaggedAndSparseTimingIsUnknown" classname="com.itu.videoeditor.MediaInfoTest" time="0.06"/>
+  <testcase name="bFrameReorderingAndDuplicateSamplesDoNotInventRate" classname="com.itu.videoeditor.MediaInfoTest" time="0.003"/>
+  <testcase name="fractional5994RateIsNotRoundedTo60" classname="com.itu.videoeditor.MediaInfoTest" time="0.024"/>
+  <testcase name="formatValidationAllowsUnknownButRejectsInvalidValues" classname="com.itu.videoeditor.MediaInfoTest" time="0.001"/>
+  <testcase name="projectProposalUsesFirstSourceDisplayDimensionsAndFractionalRate" classname="com.itu.videoeditor.MediaInfoTest" time="0.008"/>
+  <testcase name="independentlyImportedSourcesRemainVisibleWithoutProjects" classname="com.itu.videoeditor.MediaInfoTest" time="0.003"/>
+  <testcase name="missingMetadataDisplaysUnknown" classname="com.itu.videoeditor.MediaInfoTest" time="0.0"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

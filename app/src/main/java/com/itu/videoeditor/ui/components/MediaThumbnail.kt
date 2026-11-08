@@ -15,11 +15,20 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.itu.videoeditor.ItuApplication
 import com.itu.videoeditor.data.ProjectEntity
+import com.itu.videoeditor.data.MediaSourceEntity
+import com.itu.videoeditor.domain.MediaInfo
+import com.itu.videoeditor.media.*
 import com.itu.videoeditor.ui.*
 import kotlinx.coroutines.CancellationException
 
 @Composable
-fun MediaThumbnail(project: ProjectEntity, modifier: Modifier = Modifier) {
+fun MediaThumbnail(project: ProjectEntity, modifier: Modifier = Modifier, info: MediaInfo? = null) = MediaThumbnail(project.thumbnailRequest(info), modifier)
+
+@Composable
+fun MediaThumbnail(source: MediaSourceEntity, modifier: Modifier = Modifier) = MediaThumbnail(source.thumbnailRequest(), modifier)
+
+@Composable
+private fun MediaThumbnail(project: ThumbnailRequest, modifier: Modifier = Modifier) {
     val store = (LocalContext.current.applicationContext as ItuApplication).thumbnails
     var attempt by remember(project.sourceUri, project.trimStartUs) { mutableIntStateOf(0) }
     var bitmap by remember(project.sourceUri, project.trimStartUs) { mutableStateOf<android.graphics.Bitmap?>(null) }

@@ -14,10 +14,9 @@ concurrency:
 
 jobs:
   build:
-    name: Build M1.1 Debug APK
+    name: Build M1.2 Debug APK
     runs-on: ubuntu-24.04
     timeout-minutes: 30
-
     steps:
       - name: Check out source
         uses: actions/checkout@v5
@@ -40,22 +39,98 @@ jobs:
       - name: Set up Gradle cache and validate wrapper
         uses: gradle/actions/setup-gradle@v4
 
-      - name: Make Gradle wrapper executable
-        run: chmod +x ./gradlew
-
-      - name: Build debug APK and run unit tests
-        run: ./gradlew --no-daemon --stacktrace :app:assembleDebug :app:testDebugUnitTest :app:assembleDebugAndroidTest :app:lintDebug
-
-      - name: Verify debug APK signature
+      - name: Restore a baseline signing key when available
+        id: signing
+        env:
+          ITU_DEBUG_KEYSTORE_BASE64: ${{ secrets.ITU_DEBUG_KEYSTORE_BASE64 }}
         run: |
-          test -s app/build/outputs/apk/debug/app-debug.apk
-          "${ANDROID_HOME}/build-tools/35.0.0/apksigner" verify --verbose app/build/outputs/apk/debug/app-debug.apk
+          if [[ -n "$ITU_DEBUG_KEYSTORE_BASE64" ]]; then
+            mkdir -p "$HOME/.android"
+            printf '%s' "$ITU_DEBUG_KEYSTORE_BASE64" | base64 --decode > "$HOME/.android/debug.keystore"
+            chmod 600 "$HOME/.android/debug.keystore"
+            echo "mode=baseline-key" >> "$GITHUB_OUTPUT"
+          else
+            echo "mode=fresh-install-only" >> "$GITHUB_OUTPUT"
+            echo "::warning::The original M1.1 signing key is unavailable. This build is NOT an update for M1.1. Do not uninstall an app holding projects."
+          fi
 
-      - name: Upload installable debug APK
+      - name: Build APK, unit tests, instrumentation APK and lint
+        run: |
+          chmod +x ./gradlew
+          ./gradlew --no-daemon --stacktrace --max-workers=4 :app:assembleDebug :app:testDebugUnitTest :app:assembleDebugAndroidTest :app:lintDebug
+
+      - name: Verify APK identity and signing compatibility
+        env:
+          SIGNING_MODE: ${{ steps.signing.outputs.mode }}
+        run: |
+          args=()
+          if [[ "$SIGNING_MODE" == "baseline-key" ]]; then args+=(--require-match); fi
+          python3 scripts/check_apk_signing.py \
+            --apk app/build/outputs/apk/debug/app-debug.apk \
+            --apksigner "$ANDROID_HOME/build-tools/35.0.0/apksigner" \
+            --aapt "$ANDROID_HOME/build-tools/35.0.0/aapt" \
+            --out app/build/outputs/apk/debug/SIGNING_STATUS.json "${args[@]}"
+
+      - name: Upload debug APK and actual signing status
         uses: actions/upload-artifact@v4
         with:
-          name: ITU-VIDEO-EDITOR-M1.1-debug-${{ github.run_number }}
-          path: app/build/outputs/apk/debug/app-debug.apk
+          name: ITU-VIDEO-EDITOR-M1.2-${{ steps.signing.outputs.mode }}-${{ github.run_number }}
+          path: |
+            app/build/outputs/apk/debug/app-debug.apk
+            app/build/outputs/apk/debug/SIGNING_STATUS.json
           if-no-files-found: error
           retention-days: 30
           compression-level: 0
+
+      - name: Remove runner signing key
+        if: always()
+        run: rm -f "$HOME/.android/debug.keystore"
+
+  instrumentation:
+    name: Android API 35 regression tests
+    needs: build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v5
+      - name: Set up JDK 17
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          packages: platform-tools
+          log-accepted-android-sdk-licenses: false
+      - name: Install project SDK packages
+        run: sdkmanager "platforms;android-35" "build-tools;35.0.0" "platform-tools"
+      - name: Set up Gradle cache
+        uses: gradle/actions/setup-gradle@v4
+      - name: Enable hosted-runner KVM
+        run: |
+          test -e /dev/kvm
+          sudo chmod a+rw /dev/kvm
+      - name: Run connected tests on an API 35 emulator
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          target: google_apis
+          arch: x86_64
+          profile: pixel_2
+          cores: 2
+          ram-size: 2048M
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -no-snapshot-save
+          script: ./gradlew --no-daemon --stacktrace --max-workers=2 :app:connectedDebugAndroidTest
+      - name: Upload actual connected-test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ITU-M1.2-API35-test-reports-${{ github.run_number }}
+          path: |
+            app/build/reports/androidTests/connected/
+            app/build/outputs/androidTest-results/connected/
+          if-no-files-found: warn
+          retention-days: 30

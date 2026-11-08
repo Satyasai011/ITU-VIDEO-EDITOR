@@ -1,6 +1,6 @@
-# ITU VIDEO EDITOR — M1.1 Premium UI
+# ITU VIDEO EDITOR — M1.2 Prism Interface Refinement
 
-Native Kotlin/Compose Android project for a landscape-first tablet editor. This delivery is M1.1 (version 0.1.1-m1.1), not the complete V1.0. See [M1.1 implementation and validation](docs/M1_1.md) for the redesign and current checks; the original M1 validation report remains historical. No advanced timeline buttons or simulated operations are presented.
+Native Kotlin/Compose Android project for a landscape-first tablet editor. This delivery is M1.2 (version 0.1.2-m1.2, versionCode 3), not the complete V1.0. See [M1.2 implementation, validation and signing status](docs/M1_2.md). M1/M1.1 reports are historical. **Current signing material does not match the delivered M1.1 APK; do not uninstall an existing app holding projects to install an incompatible build.** No advanced timeline buttons or simulated operations are presented.
 
 ## Requirements and build
 
@@ -30,7 +30,9 @@ The debug APK is written to `app/build/outputs/apk/debug/app-debug.apk` when the
 - Real background video thumbnails, bounded memory/disk caching, grid/list Vault, search, sorting and orientation filters.
 - Compact phone editor context panels, collapsible tablet panels and video-size-aware preview fitting.
 - Dashboard, new project, Media Vault, single-source preview/trim workspace, settings.
-- Real SAF video import with persistable read permission, metadata extraction, Room project persistence.
+- Real multiple-document SAF inspection/import with persistent read grants, independent media records, actual codec/FPS/audio/size metadata and format confirmation.
+- Non-destructive Room 1→2 migration preserves existing projects/trims. Source counts and project counts are separately labelled.
+- Organized functional preferences and thumbnail cache controls; unsupported features are text descriptions only.
 - Media3 ExoPlayer playback with native seek controls, error reporting, preview mute stored in DataStore, and lifecycle pause/release.
 - Non-destructive source-range trim persisted to Room; M1 controls have millisecond precision. This is not the M2 frame-accurate timeline engine.
 - Real device encoder queries including hardware/software identity, 4K60 bitrate format checks, and vertical resolution/rate checks.

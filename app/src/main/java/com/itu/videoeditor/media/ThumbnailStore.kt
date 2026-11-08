@@ -8,6 +8,9 @@ import android.net.Uri
 import android.util.LruCache
 import com.itu.videoeditor.data.ProjectEntity
 import com.itu.videoeditor.domain.displayAspect
+import com.itu.videoeditor.domain.MediaInfo
+import com.itu.videoeditor.data.MediaSourceEntity
+import com.itu.videoeditor.data.MetadataJson
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.sync.Mutex
@@ -18,6 +21,13 @@ import java.security.MessageDigest
 import kotlin.coroutines.coroutineContext
 import kotlin.math.roundToInt
 
+data class ThumbnailRequest(val sourceUri: String, val sourceName: String, val durationUs: Long, val width: Int, val height: Int, val rotation: Int, val trimStartUs: Long = 0)
+fun ProjectEntity.thumbnailRequest(info: MediaInfo? = null) = ThumbnailRequest(sourceUri, sourceName, info?.durationUs ?: durationUs, info?.width ?: width, info?.height ?: height, info?.rotation ?: rotation, trimStartUs)
+fun MediaSourceEntity.thumbnailRequest(): ThumbnailRequest {
+    val info = MetadataJson.decode(metadataJson)
+    return ThumbnailRequest(uri, name, info.durationUs ?: 0, info.width ?: 0, info.height ?: 0, info.rotation ?: 0)
+}
+
 /** One background retriever at a time; bounded bitmap memory and disposable disk cache. */
 class ThumbnailStore(private val context: Context) {
     private val memory = object : LruCache<String, Bitmap>((Runtime.getRuntime().maxMemory() / 32).coerceIn(2L * 1024 * 1024, 24L * 1024 * 1024).toInt()) {
@@ -27,7 +37,9 @@ class ThumbnailStore(private val context: Context) {
     private val directory get() = File(context.cacheDir, "prism-thumbnails-v1")
     fun clearMemory() = memory.evictAll()
 
-    suspend fun load(project: ProjectEntity, refresh: Boolean = false): Bitmap = withContext(Dispatchers.IO) {
+    suspend fun cacheBytes(): Long = withContext(Dispatchers.IO) { gate.withLock { directory.listFiles()?.sumOf { it.length() } ?: 0L } }
+    suspend fun clearCache() = withContext(Dispatchers.IO) { gate.withLock { memory.evictAll(); directory.deleteRecursively(); Unit } }
+    suspend fun load(project: ThumbnailRequest, refresh: Boolean = false): Bitmap = withContext(Dispatchers.IO) {
         val identity = "${project.sourceUri}|${project.trimStartUs}|${project.durationUs}|${project.width}|${project.height}|${project.rotation}"
         val key = MessageDigest.getInstance("SHA-256").digest(identity.toByteArray()).joinToString("") { "%02x".format(it) }
         gate.withLock {
