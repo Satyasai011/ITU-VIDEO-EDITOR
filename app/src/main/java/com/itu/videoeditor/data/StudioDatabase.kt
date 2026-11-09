@@ -29,11 +29,22 @@ interface SourceDao {
     @Query("SELECT * FROM media_sources WHERE uri = :uri") suspend fun get(uri: String): MediaSourceEntity?
     @Upsert suspend fun save(source: MediaSourceEntity)
 }
-@Database(entities = [ProjectEntity::class, MediaSourceEntity::class], version = 2, exportSchema = true)
+@Database(entities = [ProjectEntity::class, MediaSourceEntity::class, ProjectRevisionEntity::class, TimelineOperationEntity::class, SourcePinEntity::class], version = 3, exportSchema = true)
 abstract class StudioDatabase : RoomDatabase() {
     abstract fun projects(): ProjectDao
     abstract fun sources(): SourceDao
+    abstract fun revisionFoundation(): RevisionFoundationDao
     companion object {
+        val MIGRATION_2_3 = object : Migration(2, 3) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("CREATE TABLE IF NOT EXISTS `project_revisions` (`id` TEXT NOT NULL, `projectId` TEXT NOT NULL, `revisionNumber` INTEGER NOT NULL, `snapshotVersion` INTEGER NOT NULL, `snapshotJson` TEXT NOT NULL, `createdAt` INTEGER NOT NULL, PRIMARY KEY(`id`), FOREIGN KEY(`projectId`) REFERENCES `projects`(`id`) ON UPDATE NO ACTION ON DELETE RESTRICT )")
+                db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_project_revisions_projectId_revisionNumber` ON `project_revisions` (`projectId`, `revisionNumber`)")
+                db.execSQL("CREATE TABLE IF NOT EXISTS `timeline_operations` (`id` TEXT NOT NULL, `revisionId` TEXT NOT NULL, `sequenceNumber` INTEGER NOT NULL, `operationType` TEXT NOT NULL, `payloadVersion` INTEGER NOT NULL, `payloadJson` TEXT NOT NULL, `createdAt` INTEGER NOT NULL, PRIMARY KEY(`id`), FOREIGN KEY(`revisionId`) REFERENCES `project_revisions`(`id`) ON UPDATE NO ACTION ON DELETE RESTRICT )")
+                db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_timeline_operations_revisionId_sequenceNumber` ON `timeline_operations` (`revisionId`, `sequenceNumber`)")
+                db.execSQL("CREATE TABLE IF NOT EXISTS `source_pins` (`id` TEXT NOT NULL, `projectId` TEXT NOT NULL, `sourceUri` TEXT NOT NULL, `expectedMetadataJson` TEXT NOT NULL, `availabilityState` TEXT NOT NULL, `createdAt` INTEGER NOT NULL, `checkedAt` INTEGER, PRIMARY KEY(`id`), FOREIGN KEY(`projectId`) REFERENCES `projects`(`id`) ON UPDATE NO ACTION ON DELETE RESTRICT )")
+                db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_source_pins_projectId_sourceUri` ON `source_pins` (`projectId`, `sourceUri`)")
+            }
+        }
         val MIGRATION_1_2 = object : Migration(1, 2) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("ALTER TABLE projects ADD COLUMN formatJson TEXT")
