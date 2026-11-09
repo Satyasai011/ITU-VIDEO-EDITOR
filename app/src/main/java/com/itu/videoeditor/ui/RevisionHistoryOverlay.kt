@@ -11,6 +11,11 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.platform.LocalLifecycleOwner
+import androidx.lifecycle.Lifecycle
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
@@ -34,6 +39,8 @@ fun RevisionHistoryOverlay(projectId: String, onClose: () -> Unit, reduceMotion:
     val repository = (LocalContext.current.applicationContext as ItuApplication).repository
     val pager = remember(projectId) { HistoryPager(repository::getRevisionHistory) }
     val scope = rememberCoroutineScope()
+    val focusRequester = remember { FocusRequester() }
+    var lastNavigation by remember(projectId) { mutableStateOf("older") }
     var state by remember(projectId) { mutableStateOf<HistoryPager.Outcome?>(null) }
     var busy by remember(projectId) { mutableStateOf(false) }
     var refreshing by remember(projectId) { mutableStateOf(false) }
@@ -54,7 +61,7 @@ fun RevisionHistoryOverlay(projectId: String, onClose: () -> Unit, reduceMotion:
                 val result = action()
                 state = result
                 if (refresh && result is HistoryPager.Outcome.Ready) {
-                    if (entries.none { it.id == expanded }) expanded = null
+                    if (pager.loaded.none { page -> page.entries.any { it.id == expanded } }) expanded = null
                     listState.scrollToItem(0)
                 }
             } catch (e: CancellationException) { throw e }
@@ -63,6 +70,7 @@ fun RevisionHistoryOverlay(projectId: String, onClose: () -> Unit, reduceMotion:
         }
     }
     LaunchedEffect(projectId) { runRead { pager.first(projectId) } }
+    LaunchedEffect(Unit) { focusRequester.requestFocus() }
     BackHandler { onClose() }
     BoxWithConstraints(Modifier.fillMaxSize()) {
         val width = when {
@@ -78,10 +86,10 @@ fun RevisionHistoryOverlay(projectId: String, onClose: () -> Unit, reduceMotion:
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text("Revision History", color = Color.White, fontWeight = FontWeight.Bold,
                     modifier = Modifier.weight(1f).semantics { heading() })
-                TextButton(onClick = { runRead(true) { pager.first(projectId) } }, enabled = !busy) {
+                TextButton(onClick = { lastNavigation = "refresh"; runRead(true) { pager.first(projectId) } }, enabled = !busy) {
                     Text(if (refreshing) "Refreshing…" else "Refresh", color = historyAccent)
                 }
-                TextButton(onClick = onClose) { Text("Close", color = Color.White) }
+                TextButton(onClick = onClose, modifier = Modifier.focusRequester(focusRequester)) { Text("Close", color = Color.White) }
             }
             HorizontalDivider(color = Color(0xFF35445C))
             if (busy && entries.isEmpty()) {
@@ -102,8 +110,8 @@ fun RevisionHistoryOverlay(projectId: String, onClose: () -> Unit, reduceMotion:
                 Text("Saved trim changes will appear here after a successful edit.", color = historyAccent)
             } else {
                 LazyColumn(state = listState, verticalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.weight(1f)) {
-                    if (loaded?.hasNewer == true) item(key = "newer") {
-                        OutlinedButton(enabled = !busy, onClick = { runRead { pager.newer() } }, modifier = Modifier.fillMaxWidth()) {
+                    if (currentPages.firstOrNull()?.index?.let { it > 1 } == true) item(key = "newer") {
+                        OutlinedButton(enabled = !busy, onClick = { lastNavigation = "newer"; runRead { pager.newer() } }, modifier = Modifier.fillMaxWidth()) {
                             Text("Load Newer Revisions")
                         }
                     }
@@ -115,7 +123,7 @@ fun RevisionHistoryOverlay(projectId: String, onClose: () -> Unit, reduceMotion:
                     if (error != null) item(key = "error") {
                         Column {
                             Text(error.message, color = Color(0xFFFFBDBD))
-                            OutlinedButton(onClick = { runRead { if (loaded?.hasNewer == true) pager.newer() else pager.older() } }) {
+                            OutlinedButton(onClick = { runRead { if (lastNavigation == "refresh") pager.first(projectId) else if (lastNavigation == "newer") { if (pager.pendingReplay) pager.continueReplay() else pager.newer() } else pager.older() } }) {
                                 Text("Retry Navigation")
                             }
                         }
@@ -127,8 +135,8 @@ fun RevisionHistoryOverlay(projectId: String, onClose: () -> Unit, reduceMotion:
                             TextButton(onClick = { pager.cancelReplay(); state = HistoryPager.Outcome.Ready(pager.loaded, pager.loaded.firstOrNull()?.index != 1, pager.loaded.lastOrNull()?.nextCursor != null) }) { Text("Cancel Navigation") }
                         }
                     }
-                    if (loaded?.hasOlder == true) item(key = "older") {
-                        OutlinedButton(enabled = !busy, onClick = { runRead { pager.older() } }, modifier = Modifier.fillMaxWidth()) {
+                    if (currentPages.lastOrNull()?.nextCursor != null) item(key = "older") {
+                        OutlinedButton(enabled = !busy, onClick = { lastNavigation = "older"; runRead { pager.older() } }, modifier = Modifier.fillMaxWidth()) {
                             Text(if (busy) "Loading…" else "Load Older Revisions")
                         }
                     }
