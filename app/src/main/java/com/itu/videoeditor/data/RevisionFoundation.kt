@@ -61,6 +61,9 @@ interface RevisionFoundationDao {
     @Insert(onConflict = OnConflictStrategy.ABORT)
     suspend fun insertSourcePin(pin: SourcePinEntity)
 
+    @Query("SELECT COALESCE(MAX(revisionNumber), 0) FROM project_revisions WHERE projectId = :projectId")
+    suspend fun latestRevisionNumber(projectId: String): Long
+
     @Query("SELECT * FROM project_revisions WHERE projectId = :projectId ORDER BY revisionNumber")
     suspend fun revisions(projectId: String): List<ProjectRevisionEntity>
 

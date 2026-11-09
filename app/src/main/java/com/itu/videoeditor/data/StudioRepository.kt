@@ -14,6 +14,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import java.util.UUID
+import org.json.JSONObject
 
 private val Context.preferences by preferencesDataStore("studio_preferences")
 data class StudioPreferences(val muted: Boolean = false, val vaultGrid: Boolean = true, val loopPreview: Boolean = false,
@@ -83,7 +84,43 @@ class StudioRepository(private val context: Context, private val db: StudioDatab
         runCatching { context.preferences.edit { it[lastFormatKey] = MetadataJson.format(format) } }
         return id
     }
-    suspend fun trim(id: String, range: TrimRange) { db.projects().trim(id, range.startUs, range.endUs, System.currentTimeMillis()) }
+    /**
+     * Atomic trim commit. The project row, immutable revision and its operation
+     * either all persist or all roll back. Existing projects gain history only
+     * when a user actually saves a new trim.
+     */
+    suspend fun trim(id: String, range: TrimRange) {
+        db.withTransaction {
+            val project = requireNotNull(db.projects().get(id)) { "Project not found." }
+            require(range.startUs >= 0L && range.endUs > range.startUs && range.endUs <= project.durationUs) {
+                "Trim must be within the original video duration."
+            }
+            if (project.trimStartUs == range.startUs && project.trimEndUs == range.endUs) return@withTransaction
+
+            val number = db.revisionFoundation().latestRevisionNumber(id) + 1L
+            require(number > 0L) { "Revision sequence overflow." }
+            val now = System.currentTimeMillis()
+            val revisionId = UUID.randomUUID().toString()
+            val snapshot = JSONObject()
+                .put("projectId", project.id)
+                .put("sourceUri", project.sourceUri)
+                .put("durationUs", project.durationUs)
+                .put("trimStartUs", range.startUs)
+                .put("trimEndUs", range.endUs)
+                .put("formatJson", project.formatJson ?: JSONObject.NULL)
+                .toString()
+            val operation = JSONObject()
+                .put("previousStartUs", project.trimStartUs)
+                .put("previousEndUs", project.trimEndUs)
+                .put("startUs", range.startUs)
+                .put("endUs", range.endUs)
+                .toString()
+            val revisions = db.revisionFoundation()
+            revisions.insertRevision(ProjectRevisionEntity(revisionId, id, number, 1, snapshot, now))
+            revisions.insertOperation(TimelineOperationEntity(UUID.randomUUID().toString(), revisionId, 1L, "trim", 1, operation, now))
+            db.projects().trim(id, range.startUs, range.endUs, now)
+        }
+    }
     suspend fun isReadable(uri: String): Boolean = withContext(Dispatchers.IO) {
         runCatching { context.contentResolver.openAssetFileDescriptor(Uri.parse(uri), "r")?.use { true } ?: false }.getOrDefault(false)
     }
