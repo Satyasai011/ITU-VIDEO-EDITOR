@@ -64,6 +64,12 @@ interface RevisionFoundationDao {
     @Query("SELECT COALESCE(MAX(revisionNumber), 0) FROM project_revisions WHERE projectId = :projectId")
     suspend fun latestRevisionNumber(projectId: String): Long
 
+    @Query("SELECT * FROM project_revisions WHERE projectId = :projectId AND revisionNumber <= :upperBound AND (:beforeRevision IS NULL OR revisionNumber < :beforeRevision) ORDER BY revisionNumber DESC LIMIT :fetchLimit")
+    suspend fun revisionPage(projectId: String, upperBound: Long, beforeRevision: Long?, fetchLimit: Int): List<ProjectRevisionEntity>
+
+    @Query("SELECT * FROM timeline_operations WHERE revisionId IN (:revisionIds) ORDER BY revisionId, sequenceNumber ASC")
+    suspend fun operationsForRevisions(revisionIds: List<String>): List<TimelineOperationEntity>
+
     @Query("SELECT * FROM project_revisions WHERE projectId = :projectId ORDER BY revisionNumber")
     suspend fun revisions(projectId: String): List<ProjectRevisionEntity>
 
