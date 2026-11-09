@@ -11,9 +11,6 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
-import androidx.compose.ui.platform.LocalLifecycleOwner
-import androidx.lifecycle.Lifecycle
-import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.Modifier
@@ -22,7 +19,6 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.*
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.itu.videoeditor.ItuApplication
 import com.itu.videoeditor.data.*
 import kotlinx.coroutines.CancellationException
@@ -46,6 +42,8 @@ fun RevisionHistoryOverlay(projectId: String, onClose: () -> Unit, reduceMotion:
     var refreshing by remember(projectId) { mutableStateOf(false) }
     var expanded by rememberSaveable(projectId) { mutableStateOf<String?>(null) }
     val listState = rememberLazyListState()
+    var restoredRevision by rememberSaveable(projectId) { mutableStateOf<String?>(null) }
+    var restoredOffset by rememberSaveable(projectId) { mutableIntStateOf(0) }
     val currentPages = (state as? HistoryPager.Outcome.Ready)?.pages ?: pager.loaded
     val entries = currentPages.flatMap { it.entries }
     val loaded = state as? HistoryPager.Outcome.Ready
@@ -58,8 +56,17 @@ fun RevisionHistoryOverlay(projectId: String, onClose: () -> Unit, reduceMotion:
         refreshing = refresh
         scope.launch {
             try {
+                val anchor = entries.getOrNull(listState.firstVisibleItemIndex - if (currentPages.firstOrNull()?.index?.let { it > 1 } == true) 1 else 0)?.id
+                val offset = listState.firstVisibleItemScrollOffset
                 val result = action()
                 state = result
+                if (!refresh && result is HistoryPager.Outcome.Ready && anchor != null) {
+                    val index = result.pages.flatMap { it.entries }.indexOfFirst { it.id == anchor }
+                    if (index >= 0) {
+                        val prefix = if (result.hasNewer) 1 else 0
+                        listState.scrollToItem(index + prefix, offset)
+                    }
+                }
                 if (refresh && result is HistoryPager.Outcome.Ready) {
                     if (pager.loaded.none { page -> page.entries.any { it.id == expanded } }) expanded = null
                     listState.scrollToItem(0)
@@ -71,6 +78,22 @@ fun RevisionHistoryOverlay(projectId: String, onClose: () -> Unit, reduceMotion:
     }
     LaunchedEffect(projectId) { runRead { pager.first(projectId) } }
     LaunchedEffect(Unit) { focusRequester.requestFocus() }
+    LaunchedEffect(entries.size) {
+        if (restoredRevision != null && entries.isNotEmpty()) {
+            val index = entries.indexOfFirst { it.id == restoredRevision }
+            if (index >= 0) {
+                listState.scrollToItem(index + if (currentPages.firstOrNull()?.index?.let { it > 1 } == true) 1 else 0, restoredOffset)
+                restoredRevision = null
+            }
+        }
+    }
+    DisposableEffect(projectId) {
+        onDispose {
+            restoredRevision = entries.getOrNull(listState.firstVisibleItemIndex - if (currentPages.firstOrNull()?.index?.let { it > 1 } == true) 1 else 0)?.id
+            restoredOffset = listState.firstVisibleItemScrollOffset
+            pager.cancelReplay()
+        }
+    }
     BackHandler { onClose() }
     BoxWithConstraints(Modifier.fillMaxSize()) {
         val width = when {
