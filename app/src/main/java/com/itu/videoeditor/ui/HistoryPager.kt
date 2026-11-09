@@ -41,7 +41,8 @@ class HistoryPager(private val read: suspend (String, String?, Int) -> RevisionH
     private fun validate(index: Int, cursor: String?, result: RevisionHistoryResult): Page? {
         if (result !is RevisionHistoryResult.Page || result.projectId != project) return null
         if (result.entries.size > 20 || result.entries.map { it.id }.distinct().size != result.entries.size) return null
-        if (result.entries.zipWithNext().any { (a,b) -> a.revisionNumber <= b.revisionNumber }) return null
+        if ((result.entries.map { it.id }.distinct().size != result.entries.size ||
+                        result.entries.zipWithNext().any { (a,b) -> a.revisionNumber <= b.revisionNumber })) return null
         return Page(index, result.entries, cursor, result.nextCursor)
     }
     private suspend fun fetch(index: Int, cursor: String?): Pair<Page?, Outcome.Failure?> {
@@ -52,7 +53,6 @@ class HistoryPager(private val read: suspend (String, String?, Int) -> RevisionH
         return validate(index, cursor, result) to null
     }
     suspend fun first(projectId: String): Outcome {
-        val oldProject = project
         val (page, error) = run {
             val result = read(projectId, null, 20)
             when (result) {
@@ -100,7 +100,7 @@ class HistoryPager(private val read: suspend (String, String?, Int) -> RevisionH
     private suspend fun completeNewer(index: Int, cursor: String?): Outcome {
         val (page,error) = fetch(index,cursor)
         if (error != null) return error
-        if (page == null || page.nextCursor != pages.firstOrNull()?.requestCursor ||
+        if (page == null || page.entries.isEmpty() || page.nextCursor != pages.firstOrNull()?.requestCursor ||
             page.entries.any { e -> pages.any { p -> p.entries.any { it.id == e.id } } })
             return Outcome.Failure("History boundary changed. Reload history.")
         pages.add(0,page)
@@ -120,6 +120,8 @@ class HistoryPager(private val read: suspend (String, String?, Int) -> RevisionH
             reads++
         }
         if (replay.page < replay.target) return Outcome.Paused(replay.page,replay.target)
+        // The target page is itself a read. Never exceed the per-action 10-read budget.
+        if (reads >= 10) return Outcome.Paused(replay.page, replay.target)
         val result = completeNewer(replay.target,replay.cursor)
         if (result is Outcome.Ready) pending = null
         return result
