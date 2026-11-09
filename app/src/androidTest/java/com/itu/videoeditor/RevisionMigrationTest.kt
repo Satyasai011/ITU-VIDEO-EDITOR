@@ -54,7 +54,7 @@ class RevisionMigrationTest {
                 fail("Expected foreign key rejection")
             } catch (_: android.database.sqlite.SQLiteConstraintException) {
                 // Foreign-key enforcement prevents orphan operations and rolls back revision.
-            } catch (_: androidx.sqlite.SQLiteException) {
+            } catch (_: android.database.SQLException) {
                 // Room/SQLite may wrap the same constraint failure.
             }
             assertTrue(dao.revisions("p").isEmpty())
