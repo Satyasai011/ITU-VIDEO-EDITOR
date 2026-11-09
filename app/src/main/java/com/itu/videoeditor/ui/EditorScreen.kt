@@ -57,6 +57,7 @@ fun EditorScreen(project: ProjectEntity, muted: Boolean, save: (ProjectEntity, L
     var leftVisible by rememberSaveable { mutableStateOf(true) }
     var rightVisible by rememberSaveable { mutableStateOf(true) }
     var panel by rememberSaveable { mutableStateOf("trim") }
+    var timelineVisible by rememberSaveable(project.id) { mutableStateOf(true) }
     var historyOpen by rememberSaveable(project.id) { mutableStateOf(false) }
     var resumeAfterHistory by remember { mutableStateOf(false) }
     var startUs by rememberSaveable(project.id, project.trimStartUs) { mutableLongStateOf(project.trimStartUs) }
@@ -168,6 +169,31 @@ fun EditorScreen(project: ProjectEntity, muted: Boolean, save: (ProjectEntity, L
                         Text("Original media stays untouched. Trim precision is milliseconds.", color = Muted, fontSize = 12.sp)
                         MetadataJson.readFormat(project.formatJson)?.let { format -> Text("Project intent: ${format.width ?: "Unknown"} × ${format.height ?: "Unknown"} · ${format.frameRate?.let(::decimalRate) ?: "Unknown"} FPS", color = Muted, fontSize = 12.sp) }
                         Text("Export remains 720p validation.", color = Muted, fontSize = 11.sp)
+                    }
+                }
+            }
+            // Timeline is a read-only source overview with a seekable playhead.
+            // It deliberately does not represent non-existent split or multi-track operations.
+            Surface(color = Graphite, shape = MaterialTheme.shapes.medium) {
+                Column(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                        Text("SOURCE TIMELINE", color = Cyan, fontSize = 10.sp, letterSpacing = 1.sp, modifier = Modifier.weight(1f))
+                        TextButton(onClick = { timelineVisible = !timelineVisible }) {
+                            Text(if (timelineVisible) "Hide" else "Show", fontSize = 12.sp)
+                        }
+                    }
+                    if (timelineVisible) {
+                        val durationMs = ((previewEndUs - previewStartUs) / 1000).coerceAtLeast(1L)
+                        val timelineFraction = (positionMs.toFloat() / durationMs).coerceIn(0f, 1f)
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                            Text(timeLabel(previewStartUs), color = Muted, fontSize = 11.sp, fontFamily = FontFamily.Monospace)
+                            Text("PLAYHEAD " + timeLabel(previewStartUs + positionMs.coerceIn(0L, durationMs) * 1000), color = Cyan, fontSize = 11.sp, fontFamily = FontFamily.Monospace)
+                            Text(timeLabel(previewEndUs), color = Muted, fontSize = 11.sp, fontFamily = FontFamily.Monospace)
+                        }
+                        Slider(value = timelineFraction, onValueChange = { fraction ->
+                            player.seekTo((durationMs * fraction).toLong().coerceIn(0L, durationMs))
+                        }, enabled = ready && !export.active, modifier = Modifier.fillMaxWidth())
+                        Text("Source preview · drag to seek · non-destructive", color = Muted, fontSize = 10.sp)
                     }
                 }
             }
