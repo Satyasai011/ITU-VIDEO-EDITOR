@@ -197,12 +197,29 @@ fun EditorScreen(project: ProjectEntity, muted: Boolean, save: (ProjectEntity, L
                     }
                 }
             }
-            Surface(color = Graphite, shape = MaterialTheme.shapes.medium) {
-                Row(Modifier.fillMaxWidth().padding(4.dp), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically) {
-                    listOf(Triple("media", Glyph.Vault, "Source media"), Triple("trim", Glyph.Trim, "Trim controls"), Triple("export", Glyph.Export, "Test export")).forEach { (key, icon, label) ->
-                        GlyphButton(icon, label, panel == key, primary = true) { panel = if (panel == key) "" else key }
+            // Compact floating tool dock. Actions retain their existing implementations.
+            Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                Surface(
+                    color = Graphite,
+                    shape = androidx.compose.foundation.shape.RoundedCornerShape(24.dp),
+                    tonalElevation = 8.dp,
+                    shadowElevation = 10.dp
+                ) {
+                    Row(
+                        Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        listOf(Triple("media", Glyph.Vault, "Source media"), Triple("trim", Glyph.Trim, "Trim controls"), Triple("export", Glyph.Export, "Test export")).forEach { (key, icon, label) ->
+                            GlyphButton(icon, label, panel == key, primary = true) {
+                                panel = if (panel == key) "" else key
+                            }
+                        }
+                        VerticalDivider(Modifier.height(32.dp), color = Muted.copy(alpha = 0.3f))
+                        GlyphButton(Glyph.Save, "Save trim", enabled = dirty && !export.active, primary = true) {
+                            save(project, startUs, endUs)
+                        }
                     }
-                    GlyphButton(Glyph.Save, "Save trim", enabled = dirty && !export.active, primary = true) { save(project, startUs, endUs) }
                 }
             }
             AnimatedVisibility(panel.isNotEmpty(), enter = expandVertically(tween(motionMs)) + fadeIn(tween(motionMs)), exit = shrinkVertically(tween(motionMs)) + fadeOut(tween(motionMs))) {
