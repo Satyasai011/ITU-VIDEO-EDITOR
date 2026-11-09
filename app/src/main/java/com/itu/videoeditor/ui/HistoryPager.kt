@@ -18,6 +18,8 @@ class HistoryPager(private val read: suspend (String, String?, Int) -> RevisionH
     private data class Replay(val target: Int, var page: Int, var cursor: String?)
     val loaded: List<Page> get() = pages.toList()
     val pendingReplay: Boolean get() = pending != null
+    val checkpointCount: Int get() = cursors.size
+    fun current(): Outcome.Ready = snapshot()
 
     fun reset(projectId: String) {
         project = projectId
@@ -78,7 +80,9 @@ class HistoryPager(private val read: suspend (String, String?, Int) -> RevisionH
         val cursor = last.nextCursor ?: return snapshot()
         val (page,error) = fetch(last.index + 1, cursor)
         if (error != null) return error
-        if (page == null || page.entries.isEmpty() || pages.any { existing ->
+        if (page == null || page.entries.isEmpty() ||
+            page.entries.first().revisionNumber >= last.entries.last().revisionNumber ||
+            pages.any { existing ->
             existing.entries.any { a -> page.entries.any { b -> a.id == b.id } }
         }) return Outcome.Failure("Invalid history page. Reload history.")
         pages.add(page)
@@ -101,6 +105,7 @@ class HistoryPager(private val read: suspend (String, String?, Int) -> RevisionH
         val (page,error) = fetch(index,cursor)
         if (error != null) return error
         if (page == null || page.entries.isEmpty() || page.nextCursor != pages.firstOrNull()?.requestCursor ||
+            page.entries.last().revisionNumber <= pages.first().entries.first().revisionNumber ||
             page.entries.any { e -> pages.any { p -> p.entries.any { it.id == e.id } } })
             return Outcome.Failure("History boundary changed. Reload history.")
         pages.add(0,page)
