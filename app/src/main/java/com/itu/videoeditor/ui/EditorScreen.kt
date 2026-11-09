@@ -57,6 +57,8 @@ fun EditorScreen(project: ProjectEntity, muted: Boolean, save: (ProjectEntity, L
     var leftVisible by rememberSaveable { mutableStateOf(true) }
     var rightVisible by rememberSaveable { mutableStateOf(true) }
     var panel by rememberSaveable { mutableStateOf("trim") }
+    var historyOpen by rememberSaveable(project.id) { mutableStateOf(false) }
+    var resumeAfterHistory by remember { mutableStateOf(false) }
     var startUs by rememberSaveable(project.id, project.trimStartUs) { mutableLongStateOf(project.trimStartUs) }
     var endUs by rememberSaveable(project.id, project.trimEndUs) { mutableLongStateOf(project.trimEndUs) }
     var previewStartUs by remember { mutableLongStateOf(project.trimStartUs) }
@@ -123,6 +125,7 @@ fun EditorScreen(project: ProjectEntity, muted: Boolean, save: (ProjectEntity, L
             }
         }
     }
+    Box(Modifier.fillMaxSize()) {
     BoxWithConstraints(Modifier.fillMaxSize()) {
         val wide = maxWidth >= 900.dp && maxHeight >= 480.dp
         val short = maxHeight < 430.dp
@@ -134,6 +137,7 @@ fun EditorScreen(project: ProjectEntity, muted: Boolean, save: (ProjectEntity, L
                     Text(project.name, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     Text(if (dirty) "UNSAVED TRIM" else "OBSIDIAN PRECISION", color = if (dirty) Violet else Muted, fontSize = 9.sp, letterSpacing = 1.sp)
                 }
+                GlyphButton(Glyph.Info, "Revision History") { resumeAfterHistory = player.isPlaying; player.pause(); historyOpen = true }
                 if (wide) {
                     GlyphButton(Glyph.Vault, if (leftVisible) "Collapse media panel" else "Expand media panel", leftVisible) { leftVisible = !leftVisible }
                     GlyphButton(Glyph.Info, if (rightVisible) "Collapse inspector" else "Expand inspector", rightVisible) { rightVisible = !rightVisible }
@@ -182,6 +186,12 @@ fun EditorScreen(project: ProjectEntity, muted: Boolean, save: (ProjectEntity, L
             }
             Spacer(Modifier.height(2.dp))
         }
+    }
+    if (historyOpen) RevisionHistoryOverlay(project.id, onClose = {
+        historyOpen = false
+        if (resumeAfterHistory && lifecycleOwner.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) player.play()
+        resumeAfterHistory = false
+    }, reduceMotion = preferences.reduceMotion)
     }
 }
 
