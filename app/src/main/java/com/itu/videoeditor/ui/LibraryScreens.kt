@@ -37,6 +37,7 @@ fun Dashboard(library: LibraryState, retry: () -> Unit, create: () -> Unit, vaul
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     PrismIcon(Glyph.Prism, tint = Cyan)
                     Text("OBSIDIAN PRISM  /  STUDIO", color = Cyan, fontSize = 11.sp, letterSpacing = 2.sp)
+                    Text("UI VERIFY • M1.2 • BUILD 4", color = Muted, fontSize = 10.sp)
                 }
                 Text("Your editing command center", style = MaterialTheme.typography.headlineMedium)
                 Text("Create projects, organize source footage, and return to your editing workspace.", color = Muted, fontSize = 13.sp)
