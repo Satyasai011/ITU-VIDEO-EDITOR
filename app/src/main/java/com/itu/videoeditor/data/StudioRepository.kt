@@ -121,6 +121,11 @@ class StudioRepository(private val context: Context, private val db: StudioDatab
             db.projects().trim(id, range.startUs, range.endUs, now)
         }
     }
+    /** Read-only, keyset-paginated immutable revision history. */
+    suspend fun getRevisionHistory(
+        projectId: String, cursor: String? = null, limit: Int = 20
+    ): RevisionHistoryResult = RevisionHistoryReader(db).read(projectId, cursor, limit)
+
     suspend fun isReadable(uri: String): Boolean = withContext(Dispatchers.IO) {
         runCatching { context.contentResolver.openAssetFileDescriptor(Uri.parse(uri), "r")?.use { true } ?: false }.getOrDefault(false)
     }
