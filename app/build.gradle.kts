@@ -12,8 +12,8 @@ android {
         applicationId = "com.itu.videoeditor"
         minSdk = 29
         targetSdk = 35
-        versionCode = 3
-        versionName = "0.1.2-m1.2"
+        versionCode = 4
+        versionName = "0.1.2-m1.2-ui-verify"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
     buildFeatures { compose = true; buildConfig = true }
