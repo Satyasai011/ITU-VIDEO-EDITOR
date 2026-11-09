@@ -58,6 +58,7 @@ fun EditorScreen(project: ProjectEntity, muted: Boolean, save: (ProjectEntity, L
     var rightVisible by rememberSaveable { mutableStateOf(true) }
     var panel by rememberSaveable { mutableStateOf("trim") }
     var timelineVisible by rememberSaveable(project.id) { mutableStateOf(true) }
+    var workspaceLayout by rememberSaveable(project.id) { mutableStateOf("Precision") }
     var historyOpen by rememberSaveable(project.id) { mutableStateOf(false) }
     var resumeAfterHistory by remember { mutableStateOf(false) }
     var startUs by rememberSaveable(project.id, project.trimStartUs) { mutableLongStateOf(project.trimStartUs) }
@@ -131,6 +132,9 @@ fun EditorScreen(project: ProjectEntity, muted: Boolean, save: (ProjectEntity, L
         val wide = maxWidth >= 900.dp && maxHeight >= 480.dp
         val short = maxHeight < 430.dp
         val contextHeight = (maxHeight * 0.42f).coerceIn(140.dp, 290.dp)
+        // Named local workspace presets affect presentation only; edits remain untouched.
+        val compactWorkspace = workspaceLayout == "Focus"
+        val workspaceContextHeight = if (compactWorkspace) 140.dp else contextHeight
         Column(Modifier.fillMaxSize().then(if (short) Modifier.verticalScroll(rememberScrollState()) else Modifier).padding(horizontal = 12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Row(Modifier.fillMaxWidth().heightIn(min = 48.dp), verticalAlignment = Alignment.CenterVertically) {
                 GlyphButton(Glyph.Back, "Back to Studio", onClick = back)
@@ -144,8 +148,22 @@ fun EditorScreen(project: ProjectEntity, muted: Boolean, save: (ProjectEntity, L
                     GlyphButton(Glyph.Info, if (rightVisible) "Collapse inspector" else "Expand inspector", rightVisible) { rightVisible = !rightVisible }
                 }
             }
+            Row(
+                Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text("WORKSPACE", color = Muted, fontSize = 10.sp, letterSpacing = 1.sp)
+                listOf("Precision", "Focus").forEach { layout ->
+                    FilterChip(
+                        selected = workspaceLayout == layout,
+                        onClick = { workspaceLayout = layout },
+                        label = { Text(layout, fontSize = 11.sp) }
+                    )
+                }
+            }
             Row(Modifier.fillMaxWidth().then(if (short) Modifier.height(210.dp) else Modifier.weight(1f)), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                if (wide) AnimatedVisibility(leftVisible, enter = expandHorizontally(tween(motionMs)) + fadeIn(tween(motionMs)), exit = shrinkHorizontally(tween(motionMs)) + fadeOut(tween(motionMs))) {
+                if (wide && !compactWorkspace) AnimatedVisibility(leftVisible, enter = expandHorizontally(tween(motionMs)) + fadeIn(tween(motionMs)), exit = shrinkHorizontally(tween(motionMs)) + fadeOut(tween(motionMs))) {
                     Panel(Modifier.width(184.dp).fillMaxHeight().verticalScroll(rememberScrollState())) { SourceInfo(project, info, refreshMetadata) }
                 }
                 Column(Modifier.weight(1f).fillMaxHeight()) {
@@ -161,7 +179,7 @@ fun EditorScreen(project: ProjectEntity, muted: Boolean, save: (ProjectEntity, L
                         playPause = { if (playing) player.pause() else { if (player.playbackState == Player.STATE_ENDED) player.seekTo(0); player.play() } },
                         seek = { fraction -> player.seekTo(((previewEndUs - previewStartUs) / 1000.0 * fraction).toLong().coerceIn(0, ((previewEndUs - previewStartUs) / 1000 - 1).coerceAtLeast(0))) })
                 }
-                if (wide) AnimatedVisibility(rightVisible, enter = expandHorizontally(tween(motionMs)) + fadeIn(tween(motionMs)), exit = shrinkHorizontally(tween(motionMs)) + fadeOut(tween(motionMs))) {
+                if (wide && !compactWorkspace) AnimatedVisibility(rightVisible, enter = expandHorizontally(tween(motionMs)) + fadeIn(tween(motionMs)), exit = shrinkHorizontally(tween(motionMs)) + fadeOut(tween(motionMs))) {
                     Panel(Modifier.width(196.dp).fillMaxHeight().verticalScroll(rememberScrollState())) {
                         Text("INSPECTOR", color = Muted, fontSize = 10.sp)
                         Text("Source range", style = MaterialTheme.typography.titleMedium)
@@ -223,7 +241,7 @@ fun EditorScreen(project: ProjectEntity, muted: Boolean, save: (ProjectEntity, L
                 }
             }
             AnimatedVisibility(panel.isNotEmpty(), enter = expandVertically(tween(motionMs)) + fadeIn(tween(motionMs)), exit = shrinkVertically(tween(motionMs)) + fadeOut(tween(motionMs))) {
-                Panel(Modifier.fillMaxWidth().heightIn(max = if (wide) 240.dp else contextHeight).verticalScroll(rememberScrollState())) {
+                Panel(Modifier.fillMaxWidth().heightIn(max = if (wide) 240.dp else workspaceContextHeight).verticalScroll(rememberScrollState())) {
                     when (panel) { "media" -> SourceInfo(project, info, refreshMetadata); "trim" -> TrimPanel(); "export" -> ExportPanel() }
                 }
             }
