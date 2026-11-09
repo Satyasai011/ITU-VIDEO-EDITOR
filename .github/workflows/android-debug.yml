@@ -59,6 +59,14 @@ jobs:
           chmod +x ./gradlew
           ./gradlew --no-daemon --stacktrace --max-workers=4 :app:assembleDebug :app:testDebugUnitTest :app:assembleDebugAndroidTest :app:lintDebug
 
+      - name: Upload generated Room v3 schema for review
+        uses: actions/upload-artifact@v4
+        with:
+          name: ITU-I2.1-Room-v3-schema-${{ github.run_number }}
+          path: app/schemas/com.itu.videoeditor.data.StudioDatabase/3.json
+          if-no-files-found: error
+          retention-days: 30
+
       - name: Verify APK identity and signing compatibility
         env:
           SIGNING_MODE: ${{ steps.signing.outputs.mode }}
