@@ -59,6 +59,7 @@ fun EditorScreen(project: ProjectEntity, muted: Boolean, save: (ProjectEntity, L
     var panel by rememberSaveable { mutableStateOf("trim") }
     var timelineVisible by rememberSaveable(project.id) { mutableStateOf(true) }
     var workspaceLayout by rememberSaveable(project.id) { mutableStateOf("Precision") }
+    var timelineZoom by rememberSaveable(project.id) { mutableFloatStateOf(1f) }
     var historyOpen by rememberSaveable(project.id) { mutableStateOf(false) }
     var resumeAfterHistory by remember { mutableStateOf(false) }
     var startUs by rememberSaveable(project.id, project.trimStartUs) { mutableLongStateOf(project.trimStartUs) }
@@ -202,15 +203,28 @@ fun EditorScreen(project: ProjectEntity, muted: Boolean, save: (ProjectEntity, L
                     }
                     if (timelineVisible) {
                         val durationMs = ((previewEndUs - previewStartUs) / 1000).coerceAtLeast(1L)
-                        val timelineFraction = (positionMs.toFloat() / durationMs).coerceIn(0f, 1f)
+                        val frameMs = (1000.0 / (info?.frameRate?.toDouble()?.takeIf { it > 0.0 } ?: 30.0))
+                            .toLong().coerceAtLeast(1L)
+                        val windowMs = (durationMs / timelineZoom).toLong().coerceAtLeast(1L)
+                        val currentMs = positionMs.coerceIn(0L, durationMs)
+                        val windowStart = (currentMs - windowMs / 2).coerceIn(0L, (durationMs - windowMs).coerceAtLeast(0L))
+                        val windowEnd = (windowStart + windowMs).coerceAtMost(durationMs)
+                        val timelineFraction = ((currentMs - windowStart).toFloat() / (windowEnd - windowStart).coerceAtLeast(1L)).coerceIn(0f, 1f)
                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                            Text(timeLabel(previewStartUs), color = Muted, fontSize = 11.sp, fontFamily = FontFamily.Monospace)
-                            Text("PLAYHEAD " + timeLabel(previewStartUs + positionMs.coerceIn(0L, durationMs) * 1000), color = Cyan, fontSize = 11.sp, fontFamily = FontFamily.Monospace)
-                            Text(timeLabel(previewEndUs), color = Muted, fontSize = 11.sp, fontFamily = FontFamily.Monospace)
+                            Text(timeLabel(previewStartUs + windowStart * 1000), color = Muted, fontSize = 11.sp, fontFamily = FontFamily.Monospace)
+                            Text("PLAYHEAD " + timeLabel(previewStartUs + currentMs * 1000), color = Cyan, fontSize = 11.sp, fontFamily = FontFamily.Monospace)
+                            Text(timeLabel(previewStartUs + windowEnd * 1000), color = Muted, fontSize = 11.sp, fontFamily = FontFamily.Monospace)
                         }
                         Slider(value = timelineFraction, onValueChange = { fraction ->
-                            player.seekTo((durationMs * fraction).toLong().coerceIn(0L, durationMs))
+                            player.seekTo((windowStart + ((windowEnd - windowStart) * fraction).toLong()).coerceIn(0L, durationMs))
                         }, enabled = ready && !export.active, modifier = Modifier.fillMaxWidth())
+                        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            OutlinedButton(onClick = { player.pause(); player.seekTo((currentMs - frameMs).coerceAtLeast(0L)) }, enabled = ready && !export.active) { Text("−1 frame", fontSize = 11.sp) }
+                            OutlinedButton(onClick = { player.pause(); player.seekTo((currentMs + frameMs).coerceAtMost(durationMs)) }, enabled = ready && !export.active) { Text("+1 frame", fontSize = 11.sp) }
+                            Text("Zoom", color = Muted, fontSize = 11.sp)
+                            Slider(value = timelineZoom, onValueChange = { timelineZoom = it }, valueRange = 1f..8f, steps = 6, modifier = Modifier.weight(1f))
+                            Text("${timelineZoom.toInt()}×", color = Cyan, fontSize = 11.sp)
+                        }
                         Text("Source preview · drag to seek · non-destructive", color = Muted, fontSize = 10.sp)
                     }
                 }
