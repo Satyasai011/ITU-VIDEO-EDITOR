@@ -12,6 +12,6 @@ class ItuApplication : Application() {
         thumbnails.clearMemory()
     }
     val repository by lazy {
-        StudioRepository(this, Room.databaseBuilder(this, StudioDatabase::class.java, "itu-studio.db").addMigrations(StudioDatabase.MIGRATION_1_2).build())
+        StudioRepository(this, Room.databaseBuilder(this, StudioDatabase::class.java, "itu-studio.db").addMigrations(StudioDatabase.MIGRATION_1_2, StudioDatabase.MIGRATION_2_3).build())
     }
 }
