@@ -121,6 +121,53 @@ class StudioRepository(private val context: Context, private val db: StudioDatab
             db.projects().trim(id, range.startUs, range.endUs, now)
         }
     }
+    /**
+     * Persist a source-relative split and its immutable revision in one Room transaction.
+     * This does not change the project's trim or the original media file.
+     */
+    suspend fun split(id: String, segmentIndex: Int, atUs: Long): List<SourceSegment> = db.withTransaction {
+        val project = requireNotNull(db.projects().get(id)) { "Project not found." }
+        val latest = db.revisionFoundation().revisions(id).lastOrNull()
+        val segments = if (latest != null && JSONObject(latest.snapshotJson).has("timelineVersion")) {
+            SegmentSnapshotCodec.decode(latest.snapshotJson, id, project.sourceUri, project.durationUs)
+        } else {
+            listOf(SourceSegment(project.trimStartUs, project.trimEndUs))
+        }
+        val updated = splitSegmentAt(segments, segmentIndex, atUs)
+        val number = (latest?.revisionNumber ?: 0L) + 1L
+        require(number > 0L) { "Revision sequence overflow." }
+        val now = System.currentTimeMillis()
+        val revisionId = UUID.randomUUID().toString()
+        val snapshot = JSONObject(SegmentSnapshotCodec.encode(id, project.sourceUri, updated))
+            .put("durationUs", project.durationUs)
+            .put("trimStartUs", project.trimStartUs)
+            .put("trimEndUs", project.trimEndUs)
+            .put("formatJson", project.formatJson ?: JSONObject.NULL)
+            .toString()
+        val operation = JSONObject()
+            .put("segmentIndex", segmentIndex)
+            .put("atUs", atUs)
+            .put("previousSegmentCount", segments.size)
+            .put("newSegmentCount", updated.size)
+            .toString()
+        db.revisionFoundation().insertRevision(ProjectRevisionEntity(revisionId, id, number, 1, snapshot, now))
+        db.revisionFoundation().insertOperation(TimelineOperationEntity(
+            UUID.randomUUID().toString(), revisionId, 1L, "split", 1, operation, now
+        ))
+        updated
+    }
+
+    /** Returns the latest committed segments, or the legacy single trim range. */
+    suspend fun loadSegments(id: String): List<SourceSegment> {
+        val project = requireNotNull(db.projects().get(id)) { "Project not found." }
+        val latest = db.revisionFoundation().revisions(id).lastOrNull()
+        return if (latest != null && JSONObject(latest.snapshotJson).has("timelineVersion")) {
+            SegmentSnapshotCodec.decode(latest.snapshotJson, id, project.sourceUri, project.durationUs)
+        } else {
+            listOf(SourceSegment(project.trimStartUs, project.trimEndUs))
+        }
+    }
+
     /** Read-only, keyset-paginated immutable revision history. */
     suspend fun getRevisionHistory(
         projectId: String, cursor: String? = null, limit: Int = 20
