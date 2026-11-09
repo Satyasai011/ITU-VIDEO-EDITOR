@@ -141,7 +141,7 @@ fun EditorScreen(project: ProjectEntity, muted: Boolean, save: (ProjectEntity, L
                 GlyphButton(Glyph.Back, "Back to Studio", onClick = back)
                 Column(Modifier.weight(1f)) {
                     Text(project.name, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    Text(if (dirty) "UNSAVED TRIM" else "OBSIDIAN PRECISION", color = if (dirty) Violet else Muted, fontSize = 9.sp, letterSpacing = 1.sp)
+                    Text(if (dirty) "UNSAVED TRIM" else "OBSIDIAN PRISM • EDIT WORKSPACE", color = if (dirty) Violet else Cyan, fontSize = 10.sp, letterSpacing = 1.sp)
                 }
                 GlyphButton(Glyph.Info, "Revision History") { resumeAfterHistory = player.isPlaying; player.pause(); historyOpen = true }
                 if (wide) {
@@ -214,6 +214,30 @@ fun EditorScreen(project: ProjectEntity, muted: Boolean, save: (ProjectEntity, L
                             Text(timeLabel(previewStartUs + windowStart * 1000), color = Muted, fontSize = 11.sp, fontFamily = FontFamily.Monospace)
                             Text("PLAYHEAD " + timeLabel(previewStartUs + currentMs * 1000), color = Cyan, fontSize = 11.sp, fontFamily = FontFamily.Monospace)
                             Text(timeLabel(previewStartUs + windowEnd * 1000), color = Muted, fontSize = 11.sp, fontFamily = FontFamily.Monospace)
+                        }
+                        // Visible track lane and playhead progress, not a fabricated multi-clip timeline.
+                        Surface(
+                            color = Obsidian,
+                            shape = androidx.compose.foundation.shape.RoundedCornerShape(12.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Column(Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Text("V1", color = Cyan, fontSize = 12.sp, fontFamily = FontFamily.Monospace)
+                                    Spacer(Modifier.width(10.dp))
+                                    Text(project.sourceName, color = MaterialTheme.colorScheme.onSurface, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                }
+                                LinearProgressIndicator(
+                                    progress = { timelineFraction },
+                                    modifier = Modifier.fillMaxWidth().height(10.dp),
+                                    color = Cyan,
+                                    trackColor = Violet.copy(alpha = 0.32f)
+                                )
+                                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                    Text("SOURCE CLIP", color = Muted, fontSize = 10.sp)
+                                    Text("NON-DESTRUCTIVE", color = Cyan, fontSize = 10.sp)
+                                }
+                            }
                         }
                         Slider(value = timelineFraction, onValueChange = { fraction ->
                             player.seekTo((windowStart + ((windowEnd - windowStart) * fraction).toLong()).coerceIn(0L, durationMs))
