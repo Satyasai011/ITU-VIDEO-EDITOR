@@ -23,7 +23,7 @@ class LegacyMigrationTest {
             old.execSQL("INSERT INTO projects VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", arrayOf("saved", "Existing", "content://original", "source.mp4", 5_000_000L, 1920, 1080, 0, 500_000L, 3_000_000L, 1L, 2L))
             old.version = 1
         }
-        val db = Room.databaseBuilder(context, StudioDatabase::class.java, name).addMigrations(StudioDatabase.MIGRATION_1_2).build()
+        val db = Room.databaseBuilder(context, StudioDatabase::class.java, name).addMigrations(StudioDatabase.MIGRATION_1_2, StudioDatabase.MIGRATION_2_3).build()
         try {
             val project = db.projects().observeProject("saved").first()!!
             assertEquals("content://original", project.sourceUri)
