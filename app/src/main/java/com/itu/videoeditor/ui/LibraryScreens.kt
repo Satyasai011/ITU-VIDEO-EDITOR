@@ -25,20 +25,42 @@ fun Dashboard(library: LibraryState, retry: () -> Unit, create: () -> Unit, vaul
     var details by remember { mutableStateOf<Pair<String, MediaInfo>?>(null) }
     LazyVerticalGrid(GridCells.Adaptive(240.dp), Modifier.fillMaxSize(), contentPadding = PaddingValues(16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         item(span = { GridItemSpan(maxLineSpan) }) {
-            Column(Modifier.fillMaxWidth().background(Brush.linearGradient(listOf(Color(0xFF19303A), Graphite, Color(0xFF201E30))), MaterialTheme.shapes.large).padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) { PrismIcon(Glyph.Prism, tint = Cyan); Text("PRISM STUDIO", color = Cyan, fontSize = 11.sp, letterSpacing = 2.sp) }
-                Text("Create with precision.", style = MaterialTheme.typography.headlineMedium)
+            Column(
+                Modifier.fillMaxWidth()
+                    .background(
+                        Brush.linearGradient(listOf(Color(0xFF102E39), Color(0xFF111827), Color(0xFF29203F))),
+                        androidx.compose.foundation.shape.RoundedCornerShape(28.dp)
+                    )
+                    .padding(22.dp),
+                verticalArrangement = Arrangement.spacedBy(14.dp)
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    PrismIcon(Glyph.Prism, tint = Cyan)
+                    Text("OBSIDIAN PRISM  /  STUDIO", color = Cyan, fontSize = 11.sp, letterSpacing = 2.sp)
+                }
+                Text("Your editing command center", style = MaterialTheme.typography.headlineMedium)
+                Text("Create projects, organize source footage, and return to your editing workspace.", color = Muted, fontSize = 13.sp)
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    PrismAction("New project", Glyph.Plus, primary = true, onClick = create)
-                    PrismAction("Media Vault", Glyph.Vault, onClick = vault)
+                    PrismAction("Start editing", Glyph.Plus, primary = true, onClick = create)
+                    PrismAction("Browse footage", Glyph.Vault, onClick = vault)
+                }
+                HorizontalDivider(color = Cyan.copy(alpha = 0.18f))
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Column(Modifier.weight(1f)) {
+                        Text("${library.projects.size}", color = Cyan, style = MaterialTheme.typography.headlineMedium)
+                        Text("PROJECTS", color = Muted, fontSize = 10.sp, letterSpacing = 1.sp)
+                    }
+                    Column(Modifier.weight(1f)) {
+                        Text("${library.sources.size}", color = Cyan, style = MaterialTheme.typography.headlineMedium)
+                        Text("MEDIA FILES", color = Muted, fontSize = 10.sp, letterSpacing = 1.sp)
+                    }
                 }
             }
         }
         item(span = { GridItemSpan(maxLineSpan) }) {
-            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text("Recent projects", style = MaterialTheme.typography.titleLarge)
-                Text("${library.projects.size} projects · ${library.sources.size} imported videos", color = Muted, fontSize = 12.sp)
-                Text("Projects reference media. One video can be used by several projects.", color = Muted, fontSize = 11.sp)
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text("Continue editing", style = MaterialTheme.typography.titleLarge)
+                Text("Your saved projects · tap a card to open the editor", color = Muted, fontSize = 12.sp)
             }
         }
         if (library.loading || library.error != null || library.projects.isEmpty()) item(span = { GridItemSpan(maxLineSpan) }) {
