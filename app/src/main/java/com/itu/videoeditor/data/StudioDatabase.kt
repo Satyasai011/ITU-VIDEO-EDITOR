@@ -20,6 +20,7 @@ interface ProjectDao {
     @Query("SELECT * FROM projects ORDER BY updatedAt DESC") fun observeProjects(): Flow<List<ProjectEntity>>
     @Query("SELECT * FROM projects WHERE id = :id") fun observeProject(id: String): Flow<ProjectEntity?>
     @Insert(onConflict = OnConflictStrategy.ABORT) suspend fun insert(project: ProjectEntity)
+    @Query("SELECT * FROM projects WHERE id = :id") suspend fun get(id: String): ProjectEntity?
     @Query("UPDATE projects SET trimStartUs = :startUs, trimEndUs = :endUs, updatedAt = :now WHERE id = :id")
     suspend fun trim(id: String, startUs: Long, endUs: Long, now: Long)
 }
