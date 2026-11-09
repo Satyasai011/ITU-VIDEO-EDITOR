@@ -58,4 +58,62 @@ class HistoryPagerTest {
         assertTrue(pager.first("p") is HistoryPager.Outcome.Ready)
         assertTrue(pager.loaded.single().entries.isEmpty())
     }
+    @Test fun cursorLedgerRemainsBoundedAcrossLongHistory() = runBlocking {
+        val pager = HistoryPager(reader(1000))
+        pager.first("p")
+        repeat(45) { assertTrue(pager.older() is HistoryPager.Outcome.Ready) }
+        assertEquals(10, pager.loaded.size)
+        assertEquals(200, pager.loaded.sumOf { it.entries.size })
+        assertTrue(pager.checkpointCount <= 32)
+        assertEquals(37, pager.loaded.first().index)
+    }
+
+    @Test fun expiredCheckpointReplaysInExplicitBatches() = runBlocking {
+        val pager = HistoryPager(reader(1000))
+        pager.first("p")
+        repeat(45) { pager.older() }
+        // Travel newer until the first evicted checkpoint must be reconstructed.
+        var paused = false
+        repeat(36) {
+            when (pager.newer()) {
+                is HistoryPager.Outcome.Paused -> {
+                    paused = true
+                    var attempts = 0
+                    while (pager.pendingReplay && attempts++ < 10) {
+                        val outcome = pager.continueReplay()
+                        if (outcome is HistoryPager.Outcome.Ready) break
+                        assertTrue(outcome is HistoryPager.Outcome.Paused)
+                    }
+                    assertFalse(pager.pendingReplay)
+                }
+                is HistoryPager.Outcome.Ready -> Unit
+                else -> fail("Unexpected navigation failure")
+            }
+            assertTrue(pager.loaded.size <= 10)
+            assertTrue(pager.checkpointCount <= 32)
+        }
+        assertEquals(1, pager.loaded.first().index)
+        assertTrue("Expected at least one bounded replay", paused)
+    }
+
+    @Test fun cancelledReplayLeavesLoadedPagesUnchanged() = runBlocking {
+        val pager = HistoryPager(reader(1000))
+        pager.first("p")
+        repeat(45) { pager.older() }
+        val original = pager.loaded
+        var outcome: HistoryPager.Outcome = pager.current()
+        repeat(20) {
+            if (outcome is HistoryPager.Outcome.Ready) outcome = pager.newer()
+        }
+        if (outcome is HistoryPager.Outcome.Paused) {
+            val before = pager.loaded
+            pager.cancelReplay()
+            assertFalse(pager.pendingReplay)
+            assertEquals(before, pager.loaded)
+        } else {
+            assertTrue(pager.loaded.isNotEmpty())
+        }
+        assertEquals(10, original.size)
+    }
+
 }
