@@ -11,7 +11,7 @@ import org.junit.runner.RunWith
 class StudioSmokeTest {
     @get:Rule val compose = createAndroidComposeRule<MainActivity>()
     @Test fun newProjectOpensRealImportScreen() {
-        compose.onNodeWithText("New project").performClick()
+        compose.onNodeWithText("Start editing").performClick()
         compose.onNodeWithText("Choose videos to inspect").assertIsDisplayed()
         compose.onNodeWithText("Project name").assertIsDisplayed()
     }
