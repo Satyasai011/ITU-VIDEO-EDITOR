@@ -24,6 +24,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.*
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.paneTitle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.itu.videoeditor.ItuApplication
@@ -105,7 +106,7 @@ fun RevisionHistoryOverlay(projectId: String, onClose: () -> Unit, reduceMotion:
     }
     // Keep only a stable revision anchor and pixel offset in saved state.
     // Never persist history records or opaque pagination cursors.
-    LaunchedEffect(projectId, entries.size) {
+    LaunchedEffect(projectId, currentPages) {
         if (entries.isNotEmpty() && !restorationPending) {
             snapshotFlow { listState.firstVisibleItemIndex to listState.firstVisibleItemScrollOffset }
                 .collect { (index, offset) ->
@@ -135,6 +136,7 @@ fun RevisionHistoryOverlay(projectId: String, onClose: () -> Unit, reduceMotion:
                 } else false
             }
             .background(historySurface, RoundedCornerShape(topStart = 18.dp, bottomStart = 18.dp))
+            .semantics { paneTitle = "Revision History" }
             .clickable(indication = null, interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }) {}
             .padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -159,8 +161,8 @@ fun RevisionHistoryOverlay(projectId: String, onClose: () -> Unit, reduceMotion:
                 Text("Loading saved revisions", color = historyAccent)
             } else if (error != null && (entries.isEmpty() || error.missingProject)) {
                 Text(if (error.missingProject) "Project unavailable" else error.message, color = Color.White)
-                if (!error.missingProject) OutlinedButton(onClick = { runRead { pager.first(projectId) } }) { Text("Try Again") }
-            } else if (!busy && entries.isEmpty()) {
+                if (!error.missingProject) OutlinedButton(enabled = !busy, onClick = { lastNavigation = "refresh"; runRead(true) { pager.first(projectId) } }) { Text("Try Again") }
+            } else if (!busy && entries.isEmpty() && paused == null) {
                 Text("No saved revisions yet", color = Color.White, style = MaterialTheme.typography.titleMedium)
                 Text("Saved trim changes will appear here after a successful edit.", color = historyAccent)
             } else {
