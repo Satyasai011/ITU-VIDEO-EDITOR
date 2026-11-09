@@ -13,6 +13,12 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.focusGroup
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.type
+import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
@@ -44,6 +50,7 @@ fun RevisionHistoryOverlay(projectId: String, onClose: () -> Unit, reduceMotion:
     val listState = rememberLazyListState()
     var restoredRevision by rememberSaveable(projectId) { mutableStateOf<String?>(null) }
     var restoredOffset by rememberSaveable(projectId) { mutableIntStateOf(0) }
+    var restorationPending by remember(projectId) { mutableStateOf(restoredRevision != null) }
     val currentPages = (state as? HistoryPager.Outcome.Ready)?.pages ?: pager.loaded
     val entries = currentPages.flatMap { it.entries }
     val loaded = state as? HistoryPager.Outcome.Ready
@@ -79,18 +86,21 @@ fun RevisionHistoryOverlay(projectId: String, onClose: () -> Unit, reduceMotion:
     LaunchedEffect(projectId) { runRead { pager.first(projectId) } }
     LaunchedEffect(Unit) { focusRequester.requestFocus() }
     LaunchedEffect(entries.size) {
-        if (restoredRevision != null && entries.isNotEmpty()) {
+        if (restorationPending && restoredRevision != null && entries.isNotEmpty()) {
             val index = entries.indexOfFirst { it.id == restoredRevision }
             if (index >= 0) {
                 listState.scrollToItem(index + if (currentPages.firstOrNull()?.index?.let { it > 1 } == true) 1 else 0, restoredOffset)
-                restoredRevision = null
+                restorationPending = false
+            } else {
+                // A process-restored session starts at page one. Never replay pages automatically.
+                restorationPending = false
             }
         }
     }
     // Keep only a stable revision anchor and pixel offset in saved state.
     // Never persist history records or opaque pagination cursors.
     LaunchedEffect(projectId, entries.size) {
-        if (entries.isNotEmpty()) {
+        if (entries.isNotEmpty() && !restorationPending) {
             snapshotFlow { listState.firstVisibleItemIndex to listState.firstVisibleItemScrollOffset }
                 .collect { (index, offset) ->
                     val firstRevisionIndex = index - if (currentPages.firstOrNull()?.index?.let { it > 1 } == true) 1 else 0
@@ -112,7 +122,12 @@ fun RevisionHistoryOverlay(projectId: String, onClose: () -> Unit, reduceMotion:
             else -> (maxWidth * 0.38f).coerceAtMost(560.dp)
         }
         Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.58f)).clickable(onClick = onClose))
-        Column(Modifier.align(Alignment.CenterEnd).width(width).fillMaxHeight()
+        Column(Modifier.align(Alignment.CenterEnd).width(width).fillMaxHeight().focusGroup()
+            .onPreviewKeyEvent { event ->
+                if (event.type == KeyEventType.KeyDown && event.key == Key.Escape) {
+                    onClose(); true
+                } else false
+            }
             .background(historySurface, RoundedCornerShape(topStart = 18.dp, bottomStart = 18.dp))
             .clickable(indication = null, interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }) {}
             .padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
