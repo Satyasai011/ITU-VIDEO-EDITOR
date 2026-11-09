@@ -87,12 +87,22 @@ fun RevisionHistoryOverlay(projectId: String, onClose: () -> Unit, reduceMotion:
             }
         }
     }
-    DisposableEffect(projectId) {
-        onDispose {
-            restoredRevision = entries.getOrNull(listState.firstVisibleItemIndex - if (currentPages.firstOrNull()?.index?.let { it > 1 } == true) 1 else 0)?.id
-            restoredOffset = listState.firstVisibleItemScrollOffset
-            pager.cancelReplay()
+    // Keep only a stable revision anchor and pixel offset in saved state.
+    // Never persist history records or opaque pagination cursors.
+    LaunchedEffect(projectId, entries.size) {
+        if (entries.isNotEmpty()) {
+            snapshotFlow { listState.firstVisibleItemIndex to listState.firstVisibleItemScrollOffset }
+                .collect { (index, offset) ->
+                    val firstRevisionIndex = index - if (currentPages.firstOrNull()?.index?.let { it > 1 } == true) 1 else 0
+                    entries.getOrNull(firstRevisionIndex)?.let {
+                        restoredRevision = it.id
+                        restoredOffset = offset
+                    }
+                }
         }
+    }
+    DisposableEffect(pager) {
+        onDispose { pager.cancelReplay() }
     }
     BackHandler { onClose() }
     BoxWithConstraints(Modifier.fillMaxSize()) {
