@@ -78,18 +78,23 @@ class AtomicTrimRevisionTest {
         } finally { db.close() }
     }
 
-    @Test fun databaseConstraintFailureRollsBackProjectAndHistory() = runBlocking {
+    @Test fun projectUpdateFailureRollsBackInsertedRevisionAndOperation() = runBlocking {
         val db = Room.inMemoryDatabaseBuilder(context, StudioDatabase::class.java).build()
         try {
             createProject(db)
+            db.openHelper.writableDatabase.execSQL(
+                "CREATE TRIGGER fail_trim BEFORE UPDATE OF trimStartUs ON projects " +
+                "BEGIN SELECT RAISE(ABORT, 'simulated trim update failure'); END"
+            )
             val repository = StudioRepository(context, db)
-            repository.trim("p", TrimRange(1_000_000L, 9_000_000L, 10_000_000L))
-            // Occupy the next sequence number with a different revision ID.
-            db.revisionFoundation().insertRevision(ProjectRevisionEntity("reserved", "p", 2L, 1, "{}", 1L))
-            // The normal writer must continue from the current maximum.
-            repository.trim("p", TrimRange(2_000_000L, 8_000_000L, 10_000_000L))
-            assertEquals(3L, db.revisionFoundation().revisions("p").last().revisionNumber)
-            assertEquals(2_000_000L, db.projects().get("p")!!.trimStartUs)
+            try {
+                repository.trim("p", TrimRange(1_000_000L, 9_000_000L, 10_000_000L))
+                fail("Expected database update failure")
+            } catch (_: android.database.SQLException) { }
+            assertTrue(db.revisionFoundation().revisions("p").isEmpty())
+            assertEquals(0L, db.projects().get("p")!!.trimStartUs)
+            assertEquals(10_000_000L, db.projects().get("p")!!.trimEndUs)
         } finally { db.close() }
     }
+
 }
