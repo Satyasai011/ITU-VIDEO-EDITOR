@@ -23,6 +23,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.*
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.itu.videoeditor.ItuApplication
@@ -51,9 +52,9 @@ fun RevisionHistoryOverlay(projectId: String, onClose: () -> Unit, reduceMotion:
     var restoredRevision by rememberSaveable(projectId) { mutableStateOf<String?>(null) }
     var restoredOffset by rememberSaveable(projectId) { mutableIntStateOf(0) }
     var restorationPending by remember(projectId) { mutableStateOf(restoredRevision != null) }
+    var announcement by remember(projectId) { mutableStateOf("Revision history") }
     val currentPages = (state as? HistoryPager.Outcome.Ready)?.pages ?: pager.loaded
     val entries = currentPages.flatMap { it.entries }
-    val loaded = state as? HistoryPager.Outcome.Ready
     val error = state as? HistoryPager.Outcome.Failure
     val paused = state as? HistoryPager.Outcome.Paused
 
@@ -67,6 +68,11 @@ fun RevisionHistoryOverlay(projectId: String, onClose: () -> Unit, reduceMotion:
                 val offset = listState.firstVisibleItemScrollOffset
                 val result = action()
                 state = result
+                announcement = when (result) {
+                    is HistoryPager.Outcome.Ready -> "Revision history loaded"
+                    is HistoryPager.Outcome.Paused -> "Navigation paused. Continue navigation to recover older checkpoints"
+                    is HistoryPager.Outcome.Failure -> result.message
+                }
                 if (!refresh && result is HistoryPager.Outcome.Ready && anchor != null) {
                     val index = result.pages.flatMap { it.entries }.indexOfFirst { it.id == anchor }
                     if (index >= 0) {
@@ -139,6 +145,7 @@ fun RevisionHistoryOverlay(projectId: String, onClose: () -> Unit, reduceMotion:
                 }
                 TextButton(onClick = onClose, modifier = Modifier.focusRequester(focusRequester)) { Text("Close", color = Color.White) }
             }
+            Text(announcement, modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite }, color = historyAccent, style = MaterialTheme.typography.labelSmall)
             HorizontalDivider(color = Color(0xFF35445C))
             if (busy && entries.isEmpty()) {
                 repeat(3) {
@@ -171,7 +178,7 @@ fun RevisionHistoryOverlay(projectId: String, onClose: () -> Unit, reduceMotion:
                     if (error != null) item(key = "error") {
                         Column {
                             Text(error.message, color = Color(0xFFFFBDBD))
-                            OutlinedButton(onClick = { runRead { if (lastNavigation == "refresh") pager.first(projectId) else if (lastNavigation == "newer") { if (pager.pendingReplay) pager.continueReplay() else pager.newer() } else pager.older() } }) {
+                            OutlinedButton(enabled = !busy, onClick = { runRead { if (lastNavigation == "refresh") pager.first(projectId) else if (lastNavigation == "newer") { if (pager.pendingReplay) pager.continueReplay() else pager.newer() } else pager.older() } }) {
                                 Text("Retry Navigation")
                             }
                         }
@@ -199,6 +206,7 @@ private fun RevisionCard(revision: RevisionHistoryEntry, expanded: Boolean, onTo
     val snapshot = revision.snapshot
     Surface(color = historyCard, shape = RoundedCornerShape(16.dp), modifier = Modifier.fillMaxWidth()) {
         Column(Modifier.clickable(onClick = onToggle).semantics {
+            role = Role.Button
             stateDescription = if (expanded) "Expanded" else "Collapsed"
         }.padding(16.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
